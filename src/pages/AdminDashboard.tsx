@@ -31,8 +31,10 @@ import {
   User,
   Image,
   Bell,
-  Send
+  Send,
+  UserPlus
 } from "lucide-react";
+import { InviteTechnicianForm } from "@/components/admin/InviteTechnicianForm";
 
 interface Job {
   id: string;
@@ -457,6 +459,10 @@ export default function AdminDashboard() {
 
           {/* Technicians Tab */}
           <TabsContent value="monteurs" className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-semibold">Elektriciens beheren</h2>
+              <InviteTechnicianForm onSuccess={fetchData} />
+            </div>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
               {technicians.map((tech) => {
                 const todayAvail = getTechnicianAvailability(tech.id, format(startOfToday(), "yyyy-MM-dd"));
