@@ -84,16 +84,24 @@ export type Database = {
           address: string
           base_price: number | null
           city: string | null
+          claimed_at: string | null
+          claimed_by: string | null
           completed_at: string | null
           confirmed_at: string | null
           created_at: string
           customer_id: string | null
           customer_notes: string | null
           description: string | null
+          dispatcher_notes: string | null
           final_price: number | null
+          guest_email: string | null
+          guest_name: string | null
+          guest_phone: string | null
           id: string
+          is_open_for_claim: boolean | null
           photos: string[] | null
           postal_code: string | null
+          preferred_time_slot: Database["public"]["Enums"]["time_slot"] | null
           price_breakdown: Json | null
           scheduled_date: string | null
           scheduled_time_slot: Database["public"]["Enums"]["time_slot"] | null
@@ -108,16 +116,24 @@ export type Database = {
           address: string
           base_price?: number | null
           city?: string | null
+          claimed_at?: string | null
+          claimed_by?: string | null
           completed_at?: string | null
           confirmed_at?: string | null
           created_at?: string
           customer_id?: string | null
           customer_notes?: string | null
           description?: string | null
+          dispatcher_notes?: string | null
           final_price?: number | null
+          guest_email?: string | null
+          guest_name?: string | null
+          guest_phone?: string | null
           id?: string
+          is_open_for_claim?: boolean | null
           photos?: string[] | null
           postal_code?: string | null
+          preferred_time_slot?: Database["public"]["Enums"]["time_slot"] | null
           price_breakdown?: Json | null
           scheduled_date?: string | null
           scheduled_time_slot?: Database["public"]["Enums"]["time_slot"] | null
@@ -132,16 +148,24 @@ export type Database = {
           address?: string
           base_price?: number | null
           city?: string | null
+          claimed_at?: string | null
+          claimed_by?: string | null
           completed_at?: string | null
           confirmed_at?: string | null
           created_at?: string
           customer_id?: string | null
           customer_notes?: string | null
           description?: string | null
+          dispatcher_notes?: string | null
           final_price?: number | null
+          guest_email?: string | null
+          guest_name?: string | null
+          guest_phone?: string | null
           id?: string
+          is_open_for_claim?: boolean | null
           photos?: string[] | null
           postal_code?: string | null
+          preferred_time_slot?: Database["public"]["Enums"]["time_slot"] | null
           price_breakdown?: Json | null
           scheduled_date?: string | null
           scheduled_time_slot?: Database["public"]["Enums"]["time_slot"] | null
@@ -153,6 +177,13 @@ export type Database = {
           urgency?: Database["public"]["Enums"]["job_urgency"]
         }
         Relationships: [
+          {
+            foreignKeyName: "jobs_claimed_by_fkey"
+            columns: ["claimed_by"]
+            isOneToOne: false
+            referencedRelation: "technicians"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "jobs_service_type_id_fkey"
             columns: ["service_type_id"]
@@ -285,6 +316,53 @@ export type Database = {
           skill_required?: string | null
         }
         Relationships: []
+      }
+      technician_availability: {
+        Row: {
+          afternoon: boolean | null
+          created_at: string
+          date: string
+          evening: boolean | null
+          id: string
+          morning: boolean | null
+          night: boolean | null
+          notes: string | null
+          technician_id: string
+          updated_at: string
+        }
+        Insert: {
+          afternoon?: boolean | null
+          created_at?: string
+          date: string
+          evening?: boolean | null
+          id?: string
+          morning?: boolean | null
+          night?: boolean | null
+          notes?: string | null
+          technician_id: string
+          updated_at?: string
+        }
+        Update: {
+          afternoon?: boolean | null
+          created_at?: string
+          date?: string
+          evening?: boolean | null
+          id?: string
+          morning?: boolean | null
+          night?: boolean | null
+          notes?: string | null
+          technician_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "technician_availability_technician_id_fkey"
+            columns: ["technician_id"]
+            isOneToOne: false
+            referencedRelation: "technicians"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       technicians: {
         Row: {

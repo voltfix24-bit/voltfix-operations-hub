@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { StatusBadge, UrgencyBadge } from "@/components/ui/StatusBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AvailabilityPlanner } from "@/components/technician/AvailabilityPlanner";
+import { OpenJobsList } from "@/components/technician/OpenJobsList";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 import { 
@@ -17,7 +18,10 @@ import {
   Navigation,
   Phone,
   AlertTriangle,
-  Wrench
+  Wrench,
+  Hand,
+  User,
+  Image
 } from "lucide-react";
 
 interface Job {
@@ -32,6 +36,9 @@ interface Job {
   description: string | null;
   final_price: number | null;
   created_at: string;
+  guest_name: string | null;
+  guest_phone: string | null;
+  photos: string[] | null;
   service_types: {
     name_nl: string;
   } | null;
@@ -46,6 +53,7 @@ export default function TechnicianDashboard() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [technicianId, setTechnicianId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("opdrachten");
 
   useEffect(() => {
     if (user) {
@@ -85,6 +93,9 @@ export default function TechnicianDashboard() {
         description,
         final_price,
         created_at,
+        guest_name,
+        guest_phone,
+        photos,
         service_types (name_nl),
         profiles!jobs_customer_id_fkey (full_name, phone)
       `)
@@ -144,7 +155,7 @@ export default function TechnicianDashboard() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <Card>
             <CardContent className="p-4 flex items-center gap-4">
               <div className="p-3 rounded-lg bg-primary/10">
@@ -163,7 +174,7 @@ export default function TechnicianDashboard() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{emergencyJobs.length}</p>
-                <p className="text-sm text-muted-foreground">Spoedopdrachten</p>
+                <p className="text-sm text-muted-foreground">Spoed</p>
               </div>
             </CardContent>
           </Card>
@@ -178,62 +189,102 @@ export default function TechnicianDashboard() {
               </div>
             </CardContent>
           </Card>
-        </div>
-
-        {/* Emergency Jobs First */}
-        {emergencyJobs.length > 0 && (
-          <Card className="border-emergency/30 bg-emergency-light">
-            <CardHeader>
-              <CardTitle className="font-display flex items-center gap-2 text-emergency">
-                <AlertTriangle className="h-5 w-5" />
-                Spoedopdrachten
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {emergencyJobs.map((job) => (
-                <JobCard 
-                  key={job.id} 
-                  job={job} 
-                  onUpdateStatus={updateJobStatus}
-                  getTimeSlotLabel={getTimeSlotLabel}
-                  isEmergency
-                />
-              ))}
+          <Card>
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="p-3 rounded-lg bg-secondary">
+                <Hand className="h-5 w-5 text-secondary-foreground" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{jobs.length}</p>
+                <p className="text-sm text-muted-foreground">Totaal actief</p>
+              </div>
             </CardContent>
           </Card>
-        )}
+        </div>
 
-        {/* All Jobs */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-display">Mijn Opdrachten</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
-              </div>
-            ) : jobs.filter(j => j.urgency !== "emergency").length === 0 ? (
-              <div className="text-center py-8">
-                <Wrench className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
-                <p className="text-muted-foreground">
-                  Geen geplande opdrachten op dit moment
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {jobs.filter(j => j.urgency !== "emergency").map((job) => (
-                  <JobCard 
-                    key={job.id} 
-                    job={job} 
-                    onUpdateStatus={updateJobStatus}
-                    getTimeSlotLabel={getTimeSlotLabel}
-                  />
-                ))}
-              </div>
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full max-w-md grid-cols-3">
+            <TabsTrigger value="opdrachten">Mijn Opdrachten</TabsTrigger>
+            <TabsTrigger value="beschikbaar">Beschikbaar</TabsTrigger>
+            <TabsTrigger value="planning">Planning</TabsTrigger>
+          </TabsList>
+
+          {/* My Jobs Tab */}
+          <TabsContent value="opdrachten" className="space-y-6">
+            {/* Emergency Jobs First */}
+            {emergencyJobs.length > 0 && (
+              <Card className="border-emergency/30 bg-emergency-light">
+                <CardHeader>
+                  <CardTitle className="font-display flex items-center gap-2 text-emergency">
+                    <AlertTriangle className="h-5 w-5" />
+                    Spoedopdrachten
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {emergencyJobs.map((job) => (
+                    <JobCard 
+                      key={job.id} 
+                      job={job} 
+                      onUpdateStatus={updateJobStatus}
+                      getTimeSlotLabel={getTimeSlotLabel}
+                      isEmergency
+                    />
+                  ))}
+                </CardContent>
+              </Card>
             )}
-          </CardContent>
-        </Card>
+
+            {/* All Jobs */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-display">Mijn Opdrachten</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+                  </div>
+                ) : jobs.filter(j => j.urgency !== "emergency").length === 0 ? (
+                  <div className="text-center py-8">
+                    <Wrench className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+                    <p className="text-muted-foreground">
+                      Geen geplande opdrachten op dit moment
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {jobs.filter(j => j.urgency !== "emergency").map((job) => (
+                      <JobCard 
+                        key={job.id} 
+                        job={job} 
+                        onUpdateStatus={updateJobStatus}
+                        getTimeSlotLabel={getTimeSlotLabel}
+                      />
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Open Jobs Tab */}
+          <TabsContent value="beschikbaar">
+            {technicianId && (
+              <OpenJobsList 
+                technicianId={technicianId} 
+                onJobClaimed={() => technicianId && fetchJobs(technicianId)}
+              />
+            )}
+          </TabsContent>
+
+          {/* Availability Tab */}
+          <TabsContent value="planning">
+            {technicianId && (
+              <AvailabilityPlanner technicianId={technicianId} />
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );
@@ -246,11 +297,11 @@ function JobCard({
   isEmergency = false 
 }: { 
   job: Job; 
-  onUpdateStatus: (id: string, status: string) => void;
+  onUpdateStatus: (id: string, status: "confirmed" | "on_the_way" | "in_progress" | "completed") => void;
   getTimeSlotLabel: (slot: string | null) => string;
   isEmergency?: boolean;
 }) {
-  const getNextStatus = (current: string) => {
+  const getNextStatus = (current: string): "on_the_way" | "in_progress" | "completed" | null => {
     switch (current) {
       case "confirmed": return "on_the_way";
       case "on_the_way": return "in_progress";
@@ -270,6 +321,10 @@ function JobCard({
 
   const nextStatus = getNextStatus(job.status);
   const nextLabel = getNextStatusLabel(job.status);
+  
+  // Get customer name - prioritize guest_name, then profile full_name
+  const customerName = job.guest_name || job.profiles?.full_name || "Klant";
+  const customerPhone = job.guest_phone || job.profiles?.phone;
 
   return (
     <div className={`p-4 rounded-lg border ${isEmergency ? "bg-card border-emergency/30" : "border-border"}`}>
@@ -283,14 +338,17 @@ function JobCard({
 
           {/* Customer Info */}
           <div className="flex items-center gap-4 text-sm">
-            <span className="font-medium">{job.profiles?.full_name || "Klant"}</span>
-            {job.profiles?.phone && (
+            <span className="flex items-center gap-1">
+              <User className="h-4 w-4 text-muted-foreground" />
+              {customerName}
+            </span>
+            {customerPhone && (
               <a 
-                href={`tel:${job.profiles.phone}`}
+                href={`tel:${customerPhone}`}
                 className="flex items-center gap-1 text-primary hover:underline"
               >
                 <Phone className="h-4 w-4" />
-                {job.profiles.phone}
+                {customerPhone}
               </a>
             )}
           </div>
@@ -319,6 +377,14 @@ function JobCard({
             <p className="text-sm text-muted-foreground bg-muted/50 p-2 rounded">
               {job.description}
             </p>
+          )}
+
+          {/* Photos */}
+          {job.photos && job.photos.length > 0 && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Image className="h-4 w-4" />
+              <span>{job.photos.length} foto{job.photos.length > 1 ? "'s" : ""} bijgevoegd</span>
+            </div>
           )}
         </div>
 
