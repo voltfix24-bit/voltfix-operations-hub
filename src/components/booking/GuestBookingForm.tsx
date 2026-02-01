@@ -4,8 +4,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import { Camera, X, Upload, Loader2 } from "lucide-react";
+import { Camera, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { type PriceBreakdown } from "./PriceBreakdownCard";
+
+interface BookingSuccessPayload {
+  jobId: string;
+  guestName: string;
+  guestPhone: string;
+  address: string;
+  city?: string;
+  postalCode?: string;
+}
 
 interface GuestBookingFormProps {
   serviceId: string;
@@ -15,7 +25,8 @@ interface GuestBookingFormProps {
   timeSlot?: string | null;
   basePrice: number;
   finalPrice: number;
-  onSuccess: (jobId: string) => void;
+  priceBreakdown: PriceBreakdown;
+  onSuccess: (payload: BookingSuccessPayload) => void;
   onBack: () => void;
 }
 
@@ -27,6 +38,7 @@ export function GuestBookingForm({
   timeSlot,
   basePrice,
   finalPrice,
+  priceBreakdown,
   onSuccess,
   onBack,
 }: GuestBookingFormProps) {
@@ -121,7 +133,22 @@ export function GuestBookingForm({
       // Create job - cast timeSlot to proper enum type
       const timeSlotEnum = timeSlot as "morning" | "afternoon" | "evening" | "night" | null;
       
-      const { data, error } = await supabase.from("jobs").insert({
+      // Build detailed price_breakdown for storage (cast to JSON-compatible format)
+      const storedBreakdown = {
+        lines: priceBreakdown.lines.map(line => ({
+          label: line.label,
+          amount: line.amount,
+          hint: line.hint || null,
+        })),
+        subtotal: priceBreakdown.subtotal,
+        vat: priceBreakdown.vat,
+        total: priceBreakdown.total,
+        base: basePrice,
+        type: bookingType,
+        timeSlot: timeSlot || null,
+      };
+      
+      const { data, error } = await supabase.from("jobs").insert([{
         service_type_id: serviceId,
         urgency: bookingType,
         status: "requested" as const,
@@ -138,16 +165,20 @@ export function GuestBookingForm({
         final_price: finalPrice,
         photos: uploadedPhotoUrls.length > 0 ? uploadedPhotoUrls : null,
         is_open_for_claim: true,
-        price_breakdown: {
-          base: basePrice,
-          type: bookingType,
-          timeSlot,
-          final: finalPrice,
-        },
-      }).select('id').single();
+        price_breakdown: storedBreakdown,
+      }]).select('id').single();
 
       if (error) throw error;
-      onSuccess(data.id);
+      
+      // Pass full data back to parent
+      onSuccess({
+        jobId: data.id,
+        guestName: name,
+        guestPhone: phone,
+        address: address,
+        city: city || undefined,
+        postalCode: postalCode || undefined,
+      });
     } catch (err) {
       console.error("Booking error:", err);
     } finally {
