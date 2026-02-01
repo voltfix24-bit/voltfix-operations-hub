@@ -3,13 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { useAuth } from "@/hooks/useAuth";
+import { Label } from "@/components/ui/label";
+import { GuestBookingForm } from "@/components/booking/GuestBookingForm";
+import { BookingConfirmation } from "@/components/booking/BookingConfirmation";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -23,8 +22,7 @@ import {
   ArrowRight,
   CheckCircle,
   Shield,
-  Euro,
-  Loader2
+  Euro
 } from "lucide-react";
 
 type BookingType = "emergency" | "planned";
@@ -52,8 +50,15 @@ const emergencyServices = [
   "Water in meterkast",
 ];
 
+interface BookingData {
+  jobId: string;
+  serviceName: string;
+  address: string;
+  guestName: string;
+  guestPhone: string;
+}
+
 export default function Book() {
-  const { user } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [bookingType, setBookingType] = useState<BookingType | null>(null);
@@ -61,12 +66,9 @@ export default function Book() {
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [timeSlot, setTimeSlot] = useState<TimeSlot | null>(null);
-  const [address, setAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [postalCode, setPostalCode] = useState("");
-  const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [bookingComplete, setBookingComplete] = useState(false);
+  const [bookingData, setBookingData] = useState<BookingData | null>(null);
 
   useEffect(() => {
     fetchServices();
@@ -108,45 +110,49 @@ export default function Book() {
     return Math.round(price * 100) / 100;
   };
 
-  const handleSubmit = async () => {
-    if (!user) {
-      navigate("/login?redirect=/book");
-      return;
-    }
-
-    if (!selectedService || !address) return;
-
-    setSubmitting(true);
-    try {
-      const { error } = await supabase.from("jobs").insert({
-        customer_id: user.id,
-        service_type_id: selectedService,
-        urgency: bookingType,
-        status: "requested",
-        scheduled_date: bookingType === "planned" && date ? format(date, "yyyy-MM-dd") : null,
-        scheduled_time_slot: bookingType === "planned" ? timeSlot : null,
-        address,
-        city,
-        postal_code: postalCode,
-        description,
-        base_price: selectedServiceData?.base_price,
-        final_price: calculatePrice(),
-        price_breakdown: {
-          base: selectedServiceData?.base_price,
-          type: bookingType,
-          timeSlot,
-          final: calculatePrice(),
-        },
-      });
-
-      if (error) throw error;
-      navigate("/dashboard?booked=true");
-    } catch (err) {
-      console.error("Booking error:", err);
-    } finally {
-      setSubmitting(false);
-    }
+  const handleBookingSuccess = (jobId: string) => {
+    setBookingData({
+      jobId,
+      serviceName: selectedServiceData?.name_nl || "",
+      address: "", // Will be set from form
+      guestName: "",
+      guestPhone: "",
+    });
+    setBookingComplete(true);
   };
+
+  // Show confirmation page
+  if (bookingComplete && bookingData) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <Header />
+        <main className="flex-1">
+          <section className="hero-gradient text-primary-foreground py-12 md:py-16">
+            <div className="container text-center">
+              <h1 className="font-display text-3xl md:text-4xl font-bold mb-4">
+                Bedankt voor je aanvraag!
+              </h1>
+            </div>
+          </section>
+          <div className="container py-8 md:py-12">
+            <div className="max-w-xl mx-auto">
+              <BookingConfirmation
+                jobId={bookingData.jobId}
+                bookingType={bookingType!}
+                serviceName={selectedServiceData?.name_nl || ""}
+                address={bookingData.address || "Adres ingevuld"}
+                guestName={bookingData.guestName || "Klant"}
+                guestPhone={bookingData.guestPhone || ""}
+                scheduledDate={date ? format(date, "d MMMM yyyy", { locale: nl }) : null}
+                timeSlot={timeSlot}
+              />
+            </div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -157,10 +163,10 @@ export default function Book() {
         <section className="hero-gradient text-primary-foreground py-12 md:py-16">
           <div className="container text-center">
             <h1 className="font-display text-3xl md:text-4xl font-bold mb-4">
-              Boek een Elektricien
+              Elektricien Aanvragen
             </h1>
             <p className="text-primary-foreground/80 text-lg max-w-2xl mx-auto">
-              Snel, betrouwbaar en transparant. Binnen 30 minuten bij spoed.
+              Snel, betrouwbaar en transparant. Geen account nodig.
             </p>
           </div>
         </section>
@@ -313,7 +319,7 @@ export default function Book() {
                     {bookingType === "emergency" ? "Wat is het probleem?" : "Wat wil je laten doen?"}
                   </h2>
                   <p className="text-muted-foreground">
-                    Selecteer de dienst en {bookingType === "planned" && "kies een datum"}
+                    Selecteer de dienst {bookingType === "planned" && "en kies een datum"}
                   </p>
                 </div>
 
@@ -446,71 +452,37 @@ export default function Book() {
               </div>
             )}
 
-            {/* Step 3: Details & Confirm */}
-            {step === 3 && (
+            {/* Step 3: Guest Details & Confirm */}
+            {step === 3 && selectedServiceData && (
               <div className="animate-fade-in">
                 <div className="text-center mb-8">
                   <h2 className="font-display text-2xl font-bold mb-2">
-                    Laatste stap
+                    Vul je gegevens in
                   </h2>
                   <p className="text-muted-foreground">
-                    Vul je adresgegevens in en bevestig je boeking
+                    Geen account nodig – we nemen direct contact met je op
                   </p>
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-8">
+                <div className="grid lg:grid-cols-3 gap-8">
                   {/* Form */}
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="address">Straat en huisnummer *</Label>
-                      <Input
-                        id="address"
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                        placeholder="Hoofdstraat 123"
-                        required
-                        className="h-11"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="postalCode">Postcode</Label>
-                        <Input
-                          id="postalCode"
-                          value={postalCode}
-                          onChange={(e) => setPostalCode(e.target.value)}
-                          placeholder="1234 AB"
-                          className="h-11"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="city">Plaats</Label>
-                        <Input
-                          id="city"
-                          value={city}
-                          onChange={(e) => setCity(e.target.value)}
-                          placeholder="Amsterdam"
-                          className="h-11"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="description">Omschrijving (optioneel)</Label>
-                      <Textarea
-                        id="description"
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        placeholder="Geef een korte beschrijving van het probleem..."
-                        rows={4}
-                      />
-                    </div>
+                  <div className="lg:col-span-2">
+                    <GuestBookingForm
+                      serviceId={selectedService!}
+                      serviceName={selectedServiceData.name_nl}
+                      bookingType={bookingType!}
+                      scheduledDate={date ? format(date, "yyyy-MM-dd") : null}
+                      timeSlot={timeSlot}
+                      basePrice={Number(selectedServiceData.base_price)}
+                      finalPrice={calculatePrice()}
+                      onSuccess={handleBookingSuccess}
+                      onBack={() => setStep(2)}
+                    />
                   </div>
 
-                  {/* Summary */}
+                  {/* Summary Sidebar */}
                   <div className="space-y-4">
-                    <div className="bg-card rounded-xl border border-border p-6 space-y-4">
+                    <div className="bg-card rounded-xl border border-border p-6 space-y-4 sticky top-4">
                       <h3 className="font-display font-bold text-lg">Samenvatting</h3>
                       
                       <div className="space-y-3 text-sm">
@@ -525,13 +497,13 @@ export default function Book() {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Dienst</span>
-                          <span className="font-medium">{selectedServiceData?.name_nl}</span>
+                          <span className="font-medium">{selectedServiceData.name_nl}</span>
                         </div>
                         {bookingType === "planned" && date && (
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Datum</span>
                             <span className="font-medium">
-                              {format(date, "d MMMM yyyy", { locale: nl })}
+                              {format(date, "d MMMM", { locale: nl })}
                             </span>
                           </div>
                         )}
@@ -566,35 +538,6 @@ export default function Book() {
                         <Shield className="h-4 w-4 mt-0.5 text-success" />
                         <span>Geen verborgen kosten. Betalen na afronding.</span>
                       </div>
-                    </div>
-
-                    <div className="flex gap-3">
-                      <Button 
-                        variant="outline" 
-                        onClick={() => setStep(2)}
-                        className="flex-1"
-                      >
-                        Terug
-                      </Button>
-                      <Button 
-                        onClick={handleSubmit}
-                        disabled={!address || submitting}
-                        className={cn(
-                          "flex-1",
-                          bookingType === "emergency" && "bg-emergency hover:bg-emergency/90"
-                        )}
-                      >
-                        {submitting ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Bezig...
-                          </>
-                        ) : (
-                          <>
-                            {bookingType === "emergency" ? "Direct boeken" : "Bevestigen"}
-                          </>
-                        )}
-                      </Button>
                     </div>
                   </div>
                 </div>
