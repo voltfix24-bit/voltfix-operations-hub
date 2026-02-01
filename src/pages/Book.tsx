@@ -9,6 +9,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { GuestBookingForm } from "@/components/booking/GuestBookingForm";
 import { BookingConfirmation } from "@/components/booking/BookingConfirmation";
+import { PriceBreakdownCard, type PriceBreakdown, type PriceLine } from "@/components/booking/PriceBreakdownCard";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -21,8 +22,7 @@ import {
   Phone, 
   ArrowRight,
   CheckCircle,
-  Shield,
-  Euro
+  Info
 } from "lucide-react";
 
 type BookingType = "emergency" | "planned";
@@ -35,6 +35,87 @@ interface ServiceType {
   description: string | null;
   base_price: number;
   is_emergency_eligible: boolean;
+}
+
+// ========== PRICING CONFIG ==========
+const PRICING = {
+  vatRate: 0.21,
+  plannedDiscountPct: 0.10,        // -10%
+  emergencySurchargePct: 0.50,     // +50%
+  emergencyCalloutFee: 25,         // vaste voorrijkosten
+  eveningSurchargePct: 0.25,       // +25%
+  eveningAppliesToPlanned: true,
+  eveningAppliesToEmergency: true,
+};
+
+function buildPriceBreakdown({
+  basePrice,
+  bookingType,
+  timeSlot,
+}: {
+  basePrice: number;
+  bookingType: BookingType;
+  timeSlot: TimeSlot | null;
+}): PriceBreakdown {
+  const lines: PriceLine[] = [];
+  let runningTotal = basePrice;
+
+  // Line 1: Base price
+  lines.push({
+    label: "Basistarief (dienst)",
+    amount: basePrice,
+  });
+
+  if (bookingType === "planned") {
+    // Planned discount
+    const discount = -(basePrice * PRICING.plannedDiscountPct);
+    lines.push({
+      label: "Korting gepland (-10%)",
+      amount: discount,
+      hint: "Bespaar door vooruit te plannen",
+    });
+    runningTotal += discount;
+  } else {
+    // Emergency surcharge
+    const surcharge = basePrice * PRICING.emergencySurchargePct;
+    lines.push({
+      label: "Spoedtoeslag (+50%)",
+      amount: surcharge,
+      hint: "Directe inzet binnen 30 minuten",
+    });
+    runningTotal += surcharge;
+
+    // Callout fee
+    lines.push({
+      label: "Starttarief (incl. voorrijkosten)",
+      amount: PRICING.emergencyCalloutFee,
+    });
+    runningTotal += PRICING.emergencyCalloutFee;
+  }
+
+  // Evening surcharge
+  if (timeSlot === "evening") {
+    const applyEvening =
+      (bookingType === "planned" && PRICING.eveningAppliesToPlanned) ||
+      (bookingType === "emergency" && PRICING.eveningAppliesToEmergency);
+
+    if (applyEvening) {
+      const eveningSurcharge = runningTotal * PRICING.eveningSurchargePct;
+      lines.push({
+        label: "Avondtoeslag (+25%)",
+        amount: eveningSurcharge,
+        hint: "Werkzaamheden na 17:00",
+      });
+      runningTotal += eveningSurcharge;
+    }
+  }
+
+  // Calculate VAT and totals
+  const subtotal = Math.round(runningTotal * 100) / 100;
+  const vat = Math.round(subtotal * PRICING.vatRate * 100) / 100;
+  const total = Math.round((subtotal + vat) * 100) / 100;
+
+  return { lines, subtotal, vat, total };
 }
 
 const timeSlots = [
@@ -56,6 +137,8 @@ interface BookingData {
   address: string;
   guestName: string;
   guestPhone: string;
+  city?: string;
+  postalCode?: string;
 }
 
 export default function Book() {
@@ -93,36 +176,45 @@ export default function Book() {
 
   const selectedServiceData = services.find(s => s.id === selectedService);
 
-  const calculatePrice = () => {
-    if (!selectedServiceData) return 0;
-    let price = Number(selectedServiceData.base_price);
-    
-    if (bookingType === "emergency") {
-      price = price * 1.5 + 25; // Emergency multiplier + flat fee
-    } else {
-      price = price * 0.9; // Planned discount
-    }
+  // Build price breakdown
+  const priceBreakdown = selectedServiceData && bookingType
+    ? buildPriceBreakdown({
+        basePrice: Number(selectedServiceData.base_price),
+        bookingType,
+        timeSlot,
+      })
+    : null;
 
-    if (timeSlot === "evening") {
-      price = price * 1.25;
-    }
-
-    return Math.round(price * 100) / 100;
-  };
-
-  const handleBookingSuccess = (jobId: string) => {
+  const handleBookingSuccess = (payload: {
+    jobId: string;
+    guestName: string;
+    guestPhone: string;
+    address: string;
+    city?: string;
+    postalCode?: string;
+  }) => {
     setBookingData({
-      jobId,
+      jobId: payload.jobId,
       serviceName: selectedServiceData?.name_nl || "",
-      address: "", // Will be set from form
-      guestName: "",
-      guestPhone: "",
+      address: payload.address,
+      guestName: payload.guestName,
+      guestPhone: payload.guestPhone,
+      city: payload.city,
+      postalCode: payload.postalCode,
     });
     setBookingComplete(true);
   };
 
   // Show confirmation page
   if (bookingComplete && bookingData) {
+    const fullAddress = [
+      bookingData.address,
+      bookingData.postalCode,
+      bookingData.city,
+    ]
+      .filter(Boolean)
+      .join(", ");
+
     return (
       <div className="min-h-screen flex flex-col bg-background">
         <Header />
@@ -139,10 +231,10 @@ export default function Book() {
               <BookingConfirmation
                 jobId={bookingData.jobId}
                 bookingType={bookingType!}
-                serviceName={selectedServiceData?.name_nl || ""}
-                address={bookingData.address || "Adres ingevuld"}
-                guestName={bookingData.guestName || "Klant"}
-                guestPhone={bookingData.guestPhone || ""}
+                serviceName={bookingData.serviceName}
+                address={fullAddress}
+                guestName={bookingData.guestName}
+                guestPhone={bookingData.guestPhone}
                 scheduledDate={date ? format(date, "d MMMM yyyy", { locale: nl }) : null}
                 timeSlot={timeSlot}
               />
@@ -357,6 +449,14 @@ export default function Book() {
                         ))}
                       </div>
                     </RadioGroup>
+                    
+                    {/* Pricing hint */}
+                    <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground">
+                      <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                      <span>
+                        Getoonde prijzen zijn basistarieven. Je ziet hieronder altijd de volledige prijsopbouw met toeslagen en korting.
+                      </span>
+                    </div>
                   </div>
 
                   {/* Date & Time (Planned only) */}
@@ -407,6 +507,9 @@ export default function Book() {
                             >
                               <p className="font-medium">{slot.label}</p>
                               <p className="text-sm text-muted-foreground">{slot.time}</p>
+                              {slot.value === "evening" && (
+                                <p className="text-xs text-muted-foreground mt-1">+25%</p>
+                              )}
                             </button>
                           ))}
                         </div>
@@ -429,6 +532,15 @@ export default function Book() {
                         </div>
                       </div>
                     </div>
+                  )}
+
+                  {/* Live Price Breakdown */}
+                  {priceBreakdown && (
+                    <PriceBreakdownCard
+                      breakdown={priceBreakdown}
+                      bookingType={bookingType!}
+                      compact
+                    />
                   )}
                 </div>
 
@@ -453,7 +565,7 @@ export default function Book() {
             )}
 
             {/* Step 3: Guest Details & Confirm */}
-            {step === 3 && selectedServiceData && (
+            {step === 3 && selectedServiceData && priceBreakdown && (
               <div className="animate-fade-in">
                 <div className="text-center mb-8">
                   <h2 className="font-display text-2xl font-bold mb-2">
@@ -474,7 +586,8 @@ export default function Book() {
                       scheduledDate={date ? format(date, "yyyy-MM-dd") : null}
                       timeSlot={timeSlot}
                       basePrice={Number(selectedServiceData.base_price)}
-                      finalPrice={calculatePrice()}
+                      finalPrice={priceBreakdown.total}
+                      priceBreakdown={priceBreakdown}
                       onSuccess={handleBookingSuccess}
                       onBack={() => setStep(2)}
                     />
@@ -524,21 +637,13 @@ export default function Book() {
                           </div>
                         )}
                       </div>
-
-                      <div className="border-t border-border pt-4">
-                        <div className="flex justify-between items-center">
-                          <span className="text-muted-foreground">Totaal (incl. BTW)</span>
-                          <span className="text-2xl font-bold text-primary">
-                            €{calculatePrice().toFixed(2)}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-2 text-xs text-muted-foreground">
-                        <Shield className="h-4 w-4 mt-0.5 text-success" />
-                        <span>Geen verborgen kosten. Betalen na afronding.</span>
-                      </div>
                     </div>
+
+                    {/* Price Breakdown in Sidebar */}
+                    <PriceBreakdownCard
+                      breakdown={priceBreakdown}
+                      bookingType={bookingType!}
+                    />
                   </div>
                 </div>
               </div>
