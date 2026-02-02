@@ -1,63 +1,49 @@
-import { Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import voltfixLogo from "@/assets/voltfix-logo.png";
 
 interface LogoProps {
   variant?: "default" | "light" | "dark";
-  size?: "sm" | "md" | "lg";
-  showText?: boolean;
+  size?: "sm" | "md" | "lg" | "xl";
+  showTagline?: boolean;
   className?: string;
 }
 
 export function Logo({ 
   variant = "default", 
   size = "md", 
-  showText = true,
+  showTagline = false,
   className 
 }: LogoProps) {
   const sizeClasses = {
-    sm: "h-6 w-6",
-    md: "h-8 w-8",
-    lg: "h-10 w-10",
+    sm: "h-8",
+    md: "h-10",
+    lg: "h-12",
+    xl: "h-16",
   };
 
-  const textSizeClasses = {
-    sm: "text-lg",
-    md: "text-xl",
-    lg: "text-2xl",
-  };
-
-  const colorClasses = {
-    default: "text-primary",
-    light: "text-white",
-    dark: "text-foreground",
+  const filterClasses = {
+    default: "",
+    light: "brightness-0 invert",
+    dark: "",
   };
 
   return (
-    <div className={cn("flex items-center gap-2", className)}>
-      <div className={cn(
-        "flex items-center justify-center rounded-lg p-1.5",
-        variant === "default" && "bg-primary",
-        variant === "light" && "bg-white/20",
-        variant === "dark" && "bg-primary"
-      )}>
-        <Zap 
-          className={cn(
-            sizeClasses[size],
-            variant === "default" && "text-primary-foreground",
-            variant === "light" && "text-white",
-            variant === "dark" && "text-primary-foreground"
-          )} 
-          strokeWidth={2.5}
-          fill="currentColor"
-        />
-      </div>
-      {showText && (
+    <div className={cn("flex items-center", className)}>
+      <img 
+        src={voltfixLogo} 
+        alt="VoltFix - 24/7 Service" 
+        className={cn(
+          sizeClasses[size],
+          "w-auto object-contain",
+          filterClasses[variant]
+        )}
+      />
+      {showTagline && (
         <span className={cn(
-          "font-display font-bold tracking-tight",
-          textSizeClasses[size],
-          colorClasses[variant]
+          "ml-2 text-xs font-medium tracking-wider uppercase",
+          variant === "light" ? "text-white/70" : "text-muted-foreground"
         )}>
-          VoltFix
+          24/7 Service
         </span>
       )}
     </div>
