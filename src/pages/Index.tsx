@@ -2,6 +2,8 @@ import { Link } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
+import { SEOHead } from "@/components/seo/SEOHead";
+import { CustomerSiteStructuredData } from "@/components/seo/StructuredData";
 import { 
   Zap, 
   Clock, 
@@ -44,6 +46,12 @@ const features = [
 export default function Index() {
   return (
     <div className="min-h-screen flex flex-col">
+      <SEOHead
+        title="VoltFix - 24/7 Elektricien Service | Storingsdienst Nederland"
+        description="Professionele elektricien 24/7 beschikbaar. Stroomstoring, kortsluiting, meterkast keuring, laadpaal installatie. Transparante prijzen, gecertificeerde monteurs. Bel nu!"
+        canonical="https://voltfix.nl"
+      />
+      <CustomerSiteStructuredData />
       <Header />
 
       {/* Hero Section */}

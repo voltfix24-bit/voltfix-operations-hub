@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import { GuestBookingForm } from "@/components/booking/GuestBookingForm";
 import { BookingConfirmation } from "@/components/booking/BookingConfirmation";
 import { PriceBreakdownCard, type PriceBreakdown, type PriceLine } from "@/components/booking/PriceBreakdownCard";
+import { SEOHead } from "@/components/seo/SEOHead";
+import { StructuredData } from "@/components/seo/StructuredData";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -248,6 +250,15 @@ export default function Book() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
+      <SEOHead
+        title="Elektricien Boeken | VoltFix - Direct Online Aanvragen"
+        description="Boek direct een elektricien online. 24/7 storingsdienst of gepland bezoek. Transparante prijzen vooraf zichtbaar. Geen account nodig."
+        canonical="https://voltfix.nl/book"
+      />
+      <StructuredData type="Service" data={{
+        name: "Online Elektricien Boeken",
+        description: "Direct een elektricien aanvragen via ons online boekingssysteem. Kies tussen spoeddienst of geplande afspraak.",
+      }} />
       <Header />
 
       <main className="flex-1">
