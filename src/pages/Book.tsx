@@ -11,7 +11,7 @@ import { GuestBookingForm } from "@/components/booking/GuestBookingForm";
 import { BookingConfirmation } from "@/components/booking/BookingConfirmation";
 import { PriceBreakdownCard, type PriceBreakdown, type PriceLine } from "@/components/booking/PriceBreakdownCard";
 import { SEOHead } from "@/components/seo/SEOHead";
-import { StructuredData } from "@/components/seo/StructuredData";
+import { StructuredData, CustomerSiteStructuredData } from "@/components/seo/StructuredData";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -251,13 +251,14 @@ export default function Book() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <SEOHead
-        title="Elektricien Boeken | VoltFix - Direct Online Aanvragen"
-        description="Boek direct een elektricien online. 24/7 storingsdienst of gepland bezoek. Transparante prijzen vooraf zichtbaar. Geen account nodig."
-        canonical="https://voltfix.nl/book"
+        title="VoltFix - 24/7 Elektricien Service | Direct Online Boeken"
+        description="Professionele elektricien 24/7 beschikbaar. Stroomstoring, kortsluiting, meterkast keuring, laadpaal installatie. Boek direct online, geen account nodig. Transparante prijzen vooraf zichtbaar."
+        canonical="https://voltfix.nl"
       />
+      <CustomerSiteStructuredData />
       <StructuredData type="Service" data={{
-        name: "Online Elektricien Boeken",
-        description: "Direct een elektricien aanvragen via ons online boekingssysteem. Kies tussen spoeddienst of geplande afspraak.",
+        name: "VoltFix Elektricien Service",
+        description: "Professionele elektricien service in Nederland. 24/7 storingsdienst, meterkast keuringen, laadpaal installatie. Direct online boeken.",
       }} />
       <Header />
 
@@ -265,8 +266,14 @@ export default function Book() {
         {/* Hero */}
         <section className="hero-gradient text-primary-foreground py-12 md:py-16">
           <div className="container text-center">
-            <h1 className="font-display text-3xl md:text-4xl font-bold mb-4">
-              Elektricien Aanvragen
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm text-sm font-medium mb-4">
+              <span className="inline-block h-2 w-2 rounded-full bg-success animate-pulse" />
+              24/7 Storingsdienst beschikbaar
+            </div>
+            <h1 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold mb-4">
+              Professionele Elektricien
+              <br />
+              <span className="text-primary-foreground/90">Direct Boeken</span>
             </h1>
             <p className="text-primary-foreground/80 text-lg max-w-2xl mx-auto">
               Snel, betrouwbaar en transparant. Geen account nodig.

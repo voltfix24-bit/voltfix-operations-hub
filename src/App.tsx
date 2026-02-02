@@ -7,7 +7,6 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { getSiteMode, isBackofficeRoute, isCustomerRoute } from "@/lib/subdomain";
 
 // Customer pages
-import Index from "./pages/Index";
 import Book from "./pages/Book";
 
 // Auth pages
@@ -70,11 +69,12 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// Customer site routes (public, SEO-optimized)
+// Customer site routes (public, SEO-optimized) - Booking only
 function CustomerRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Index />} />
+      {/* Root is the booking page */}
+      <Route path="/" element={<Book />} />
       <Route path="/book" element={<Book />} />
       <Route path="/book/*" element={<Book />} />
       {/* Track booking status (future) */}
@@ -134,8 +134,8 @@ function BackofficeRoutes() {
 function DevelopmentRoutes() {
   return (
     <Routes>
-      {/* Public routes */}
-      <Route path="/" element={<Index />} />
+      {/* Public routes - Booking is the main entry */}
+      <Route path="/" element={<Book />} />
       <Route path="/book" element={<Book />} />
       <Route path="/book/*" element={<Book />} />
       
