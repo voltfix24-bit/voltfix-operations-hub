@@ -358,38 +358,52 @@ export default function Book() {
                 { num: 1, label: "Type" },
                 { num: 2, label: "Details" },
                 { num: 3, label: "Gegevens" },
-              ].map((s, idx) => (
-                <div key={s.num} className="flex items-center">
-                  <motion.div 
-                    className="flex items-center gap-1.5 sm:gap-2"
-                    animate={{
-                      scale: step === s.num ? 1.05 : 1,
-                    }}
-                    transition={{ type: "spring", stiffness: 300 }}
-                  >
-                    <div className={cn(
-                      "w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-medium text-sm transition-all duration-300",
-                      step >= s.num 
-                        ? "bg-primary text-primary-foreground shadow-md" 
-                        : "bg-muted text-muted-foreground"
-                    )}>
-                      {step > s.num ? <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" /> : s.num}
-                    </div>
-                    <span className={cn(
-                      "text-xs sm:text-sm font-medium hidden sm:block",
-                      step >= s.num ? "text-foreground" : "text-muted-foreground"
-                    )}>
-                      {s.label}
-                    </span>
-                  </motion.div>
-                  {idx < 2 && (
-                    <div className={cn(
-                      "w-8 sm:w-12 md:w-20 h-0.5 mx-1 sm:mx-2 transition-colors duration-300",
-                      step > s.num ? "bg-primary" : "bg-muted"
-                    )} />
-                  )}
-                </div>
-              ))}
+              ].map((s, idx) => {
+                // Can only navigate back to completed steps
+                const canNavigate = step > s.num;
+                
+                return (
+                  <div key={s.num} className="flex items-center">
+                    <motion.button
+                      type="button"
+                      onClick={() => canNavigate && setStep(s.num)}
+                      className={cn(
+                        "flex items-center gap-1.5 sm:gap-2",
+                        canNavigate && "cursor-pointer"
+                      )}
+                      animate={{
+                        scale: step === s.num ? 1.05 : 1,
+                      }}
+                      transition={{ type: "spring", stiffness: 300 }}
+                      disabled={!canNavigate}
+                      aria-label={canNavigate ? `Terug naar stap ${s.num}: ${s.label}` : undefined}
+                    >
+                      <div className={cn(
+                        "w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-medium text-sm transition-all duration-300",
+                        step >= s.num 
+                          ? "bg-primary text-primary-foreground shadow-md" 
+                          : "bg-muted text-muted-foreground",
+                        canNavigate && "hover:ring-2 hover:ring-primary/30 hover:ring-offset-2"
+                      )}>
+                        {step > s.num ? <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" /> : s.num}
+                      </div>
+                      <span className={cn(
+                        "text-xs sm:text-sm font-medium hidden sm:block",
+                        step >= s.num ? "text-foreground" : "text-muted-foreground",
+                        canNavigate && "hover:underline"
+                      )}>
+                        {s.label}
+                      </span>
+                    </motion.button>
+                    {idx < 2 && (
+                      <div className={cn(
+                        "w-8 sm:w-12 md:w-20 h-0.5 mx-1 sm:mx-2 transition-colors duration-300",
+                        step > s.num ? "bg-primary" : "bg-muted"
+                      )} />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
