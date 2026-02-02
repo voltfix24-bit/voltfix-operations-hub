@@ -31,7 +31,12 @@ import {
   Star,
   Users,
   X,
-  Camera
+  Camera,
+  Power,
+  Flame,
+  Droplets,
+  HelpCircle,
+  type LucideIcon
 } from "lucide-react";
 
 type BookingType = "emergency" | "planned";
@@ -46,13 +51,13 @@ interface ServiceType {
   is_emergency_eligible: boolean;
 }
 
-// Emergency service options (hardcoded for now)
-const EMERGENCY_SERVICES = [
-  { id: "stroomstoring", label: "Stroomstoring", icon: "⚡" },
-  { id: "kortsluiting", label: "Kortsluiting", icon: "💥" },
-  { id: "brandlucht", label: "Brandlucht", icon: "🔥" },
-  { id: "water-meterkast", label: "Water in meterkast", icon: "💧" },
-  { id: "anders", label: "Anders", icon: "❓" },
+// Emergency service options with Lucide icons
+const EMERGENCY_SERVICES: { id: string; label: string; icon: LucideIcon }[] = [
+  { id: "stroomstoring", label: "Stroomstoring", icon: Power },
+  { id: "kortsluiting", label: "Kortsluiting", icon: Zap },
+  { id: "brandlucht", label: "Brandlucht", icon: Flame },
+  { id: "water-meterkast", label: "Water in meterkast", icon: Droplets },
+  { id: "anders", label: "Anders", icon: HelpCircle },
 ];
 
 const EMERGENCY_HOURLY_RATE = 120; // €120 ex BTW per eerste uur
@@ -592,38 +597,45 @@ export default function Book() {
                     <span>Bel direct: 020 - 123 4567</span>
                   </motion.a>
 
-                  <div className="text-center">
+                  <div className="text-center mb-2">
+                    <h2 className="font-display text-xl sm:text-2xl font-bold mb-1">
+                      Selecteer je storing
+                    </h2>
                     <p className="text-muted-foreground text-sm">
-                      Of selecteer hieronder je storing om online door te gaan
+                      Of boek online via onderstaande opties
                     </p>
                   </div>
 
-                  <div className="text-center mb-4">
-                    <h2 className="font-display text-xl sm:text-2xl font-bold mb-2">
-                      Wat is het probleem?
-                    </h2>
-                  </div>
-
                   {/* Emergency Services Grid */}
-                  <div className="grid grid-cols-2 gap-3">
-                    {EMERGENCY_SERVICES.map((service) => (
-                      <motion.button
-                        key={service.id}
-                        type="button"
-                        onClick={() => setSelectedEmergencyService(service.id)}
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        className={cn(
-                          "p-4 rounded-xl border-2 text-center transition-all",
-                          selectedEmergencyService === service.id
-                            ? "border-emergency bg-emergency/10 shadow-md"
-                            : "border-border hover:border-emergency/50"
-                        )}
-                      >
-                        <div className="text-2xl mb-2">{service.icon}</div>
-                        <p className="font-medium text-sm">{service.label}</p>
-                      </motion.button>
-                    ))}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {EMERGENCY_SERVICES.map((service) => {
+                      const IconComponent = service.icon;
+                      return (
+                        <motion.button
+                          key={service.id}
+                          type="button"
+                          onClick={() => setSelectedEmergencyService(service.id)}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          className={cn(
+                            "p-4 rounded-xl border-2 text-center transition-all",
+                            selectedEmergencyService === service.id
+                              ? "border-emergency bg-emergency/10 shadow-md"
+                              : "border-border hover:border-emergency/50"
+                          )}
+                        >
+                          <div className={cn(
+                            "w-10 h-10 mx-auto mb-2 rounded-full flex items-center justify-center",
+                            selectedEmergencyService === service.id
+                              ? "bg-emergency text-emergency-foreground"
+                              : "bg-muted text-muted-foreground"
+                          )}>
+                            <IconComponent className="h-5 w-5" />
+                          </div>
+                          <p className="font-medium text-sm">{service.label}</p>
+                        </motion.button>
+                      );
+                    })}
                   </div>
 
                   {/* Optional description - shown for all services */}
