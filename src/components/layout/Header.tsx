@@ -1,4 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/ui/Logo";
 import { useAuth } from "@/hooks/useAuth";
@@ -11,11 +13,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { User, Settings, LogOut, LayoutDashboard, Phone } from "lucide-react";
+import { User, Settings, LogOut, LayoutDashboard, Phone, Menu, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export function Header() {
   const { user, profile, role, signOut } = useAuth();
   const navigate = useNavigate();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
@@ -52,23 +56,32 @@ export function Header() {
           <Logo size="md" />
         </Link>
 
+        {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-6">
           <Link 
-            to="/book" 
+            to="/" 
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
             Boeken
           </Link>
           <a 
             href="tel:+31201234567" 
-            className="flex items-center gap-2 text-sm font-semibold text-emergency hover:text-emergency/80 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 rounded-full bg-emergency/10 text-sm font-semibold text-emergency hover:bg-emergency/20 transition-colors"
           >
             <Phone className="h-4 w-4" />
             020 - 123 4567
           </a>
         </nav>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          {/* Mobile Phone Button */}
+          <a 
+            href="tel:+31201234567" 
+            className="md:hidden flex items-center justify-center w-10 h-10 rounded-full bg-emergency/10 text-emergency"
+          >
+            <Phone className="h-5 w-5" />
+          </a>
+
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -112,17 +125,58 @@ export function Header() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" asChild>
-                <Link to="/login">Inloggen</Link>
-              </Button>
-              <Button asChild>
-                <Link to="/register">Registreren</Link>
-              </Button>
-            </div>
+            <>
+              {/* Desktop Auth Buttons */}
+              <div className="hidden md:flex items-center gap-2">
+                <Button variant="ghost" asChild>
+                  <Link to="/login">Inloggen</Link>
+                </Button>
+                <Button asChild>
+                  <Link to="/register">Registreren</Link>
+                </Button>
+              </div>
+
+              {/* Mobile Menu Button */}
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="md:hidden p-2 rounded-lg hover:bg-muted transition-colors"
+                aria-label="Menu"
+              >
+                {mobileMenuOpen ? (
+                  <X className="h-6 w-6" />
+                ) : (
+                  <Menu className="h-6 w-6" />
+                )}
+              </button>
+            </>
           )}
         </div>
       </div>
+
+      {/* Mobile Menu */}
+      <AnimatePresence>
+        {mobileMenuOpen && !user && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="md:hidden border-t border-border bg-background overflow-hidden"
+          >
+            <div className="container py-4 space-y-3">
+              <Button variant="outline" asChild className="w-full justify-center h-12 rounded-xl">
+                <Link to="/login" onClick={() => setMobileMenuOpen(false)}>
+                  Inloggen
+                </Link>
+              </Button>
+              <Button asChild className="w-full justify-center h-12 rounded-xl">
+                <Link to="/register" onClick={() => setMobileMenuOpen(false)}>
+                  Registreren
+                </Link>
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </header>
   );
 }

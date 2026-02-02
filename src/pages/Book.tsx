@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
@@ -23,8 +24,12 @@ import {
   CalendarIcon, 
   Phone, 
   ArrowRight,
+  ArrowLeft,
   CheckCircle,
-  Info
+  Info,
+  Shield,
+  Star,
+  Users
 } from "lucide-react";
 
 type BookingType = "emergency" | "planned";
@@ -42,10 +47,10 @@ interface ServiceType {
 // ========== PRICING CONFIG ==========
 const PRICING = {
   vatRate: 0.21,
-  plannedDiscountPct: 0.10,        // -10%
-  emergencySurchargePct: 0.50,     // +50%
-  emergencyCalloutFee: 25,         // vaste voorrijkosten
-  eveningSurchargePct: 0.25,       // +25%
+  plannedDiscountPct: 0.10,
+  emergencySurchargePct: 0.50,
+  emergencyCalloutFee: 25,
+  eveningSurchargePct: 0.25,
   eveningAppliesToPlanned: true,
   eveningAppliesToEmergency: true,
 };
@@ -62,14 +67,12 @@ function buildPriceBreakdown({
   const lines: PriceLine[] = [];
   let runningTotal = basePrice;
 
-  // Line 1: Base price
   lines.push({
     label: "Basistarief (dienst)",
     amount: basePrice,
   });
 
   if (bookingType === "planned") {
-    // Planned discount
     const discount = -(basePrice * PRICING.plannedDiscountPct);
     lines.push({
       label: "Korting gepland (-10%)",
@@ -78,7 +81,6 @@ function buildPriceBreakdown({
     });
     runningTotal += discount;
   } else {
-    // Emergency surcharge
     const surcharge = basePrice * PRICING.emergencySurchargePct;
     lines.push({
       label: "Spoedtoeslag (+50%)",
@@ -87,7 +89,6 @@ function buildPriceBreakdown({
     });
     runningTotal += surcharge;
 
-    // Callout fee
     lines.push({
       label: "Starttarief (incl. voorrijkosten)",
       amount: PRICING.emergencyCalloutFee,
@@ -95,7 +96,6 @@ function buildPriceBreakdown({
     runningTotal += PRICING.emergencyCalloutFee;
   }
 
-  // Evening surcharge
   if (timeSlot === "evening") {
     const applyEvening =
       (bookingType === "planned" && PRICING.eveningAppliesToPlanned) ||
@@ -112,7 +112,6 @@ function buildPriceBreakdown({
     }
   }
 
-  // Calculate VAT and totals
   const subtotal = Math.round(runningTotal * 100) / 100;
   const vat = Math.round(subtotal * PRICING.vatRate * 100) / 100;
   const total = Math.round((subtotal + vat) * 100) / 100;
@@ -121,9 +120,9 @@ function buildPriceBreakdown({
 }
 
 const timeSlots = [
-  { value: "morning" as TimeSlot, label: "Ochtend", time: "08:00 - 12:00" },
-  { value: "afternoon" as TimeSlot, label: "Middag", time: "12:00 - 17:00" },
-  { value: "evening" as TimeSlot, label: "Avond", time: "17:00 - 21:00" },
+  { value: "morning" as TimeSlot, label: "Ochtend", time: "08:00 - 12:00", icon: "☀️" },
+  { value: "afternoon" as TimeSlot, label: "Middag", time: "12:00 - 17:00", icon: "🌤️" },
+  { value: "evening" as TimeSlot, label: "Avond", time: "17:00 - 21:00", icon: "🌙" },
 ];
 
 const emergencyServices = [
@@ -131,6 +130,12 @@ const emergencyServices = [
   "Kortsluiting",
   "Brandlucht",
   "Water in meterkast",
+];
+
+const trustIndicators = [
+  { icon: Shield, label: "Gecertificeerd", sublabel: "NEN 3140" },
+  { icon: Star, label: "4.9/5 sterren", sublabel: "500+ reviews" },
+  { icon: Users, label: "10.000+", sublabel: "tevreden klanten" },
 ];
 
 interface BookingData {
@@ -142,6 +147,21 @@ interface BookingData {
   city?: string;
   postalCode?: string;
 }
+
+// Animation variants
+const fadeInUp = {
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -20 },
+};
+
+const staggerContainer = {
+  animate: {
+    transition: {
+      staggerChildren: 0.1,
+    },
+  },
+};
 
 export default function Book() {
   const navigate = useNavigate();
@@ -178,7 +198,6 @@ export default function Book() {
 
   const selectedServiceData = services.find(s => s.id === selectedService);
 
-  // Build price breakdown
   const priceBreakdown = selectedServiceData && bookingType
     ? buildPriceBreakdown({
         basePrice: Number(selectedServiceData.base_price),
@@ -221,15 +240,29 @@ export default function Book() {
       <div className="min-h-screen flex flex-col bg-background">
         <Header />
         <main className="flex-1">
-          <section className="hero-gradient text-primary-foreground py-12 md:py-16">
+          <motion.section 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="hero-gradient text-primary-foreground py-12 md:py-16"
+          >
             <div className="container text-center">
-              <h1 className="font-display text-3xl md:text-4xl font-bold mb-4">
+              <motion.h1 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="font-display text-3xl md:text-4xl font-bold mb-4"
+              >
                 Bedankt voor je aanvraag!
-              </h1>
+              </motion.h1>
             </div>
-          </section>
+          </motion.section>
           <div className="container py-8 md:py-12">
-            <div className="max-w-xl mx-auto">
+            <motion.div 
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="max-w-xl mx-auto"
+            >
               <BookingConfirmation
                 jobId={bookingData.jobId}
                 bookingType={bookingType!}
@@ -240,7 +273,7 @@ export default function Book() {
                 scheduledDate={date ? format(date, "d MMMM yyyy", { locale: nl }) : null}
                 timeSlot={timeSlot}
               />
-            </div>
+            </motion.div>
           </div>
         </main>
         <Footer />
@@ -264,41 +297,95 @@ export default function Book() {
 
       <main className="flex-1">
         {/* Hero */}
-        <section className="hero-gradient text-primary-foreground py-12 md:py-16">
-          <div className="container text-center">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm text-sm font-medium mb-4">
-              <span className="inline-block h-2 w-2 rounded-full bg-success animate-pulse" />
-              24/7 Storingsdienst beschikbaar
-            </div>
-            <h1 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold mb-4">
-              Professionele Elektricien
-              <br />
-              <span className="text-primary-foreground/90">Direct Boeken</span>
-            </h1>
-            <p className="text-primary-foreground/80 text-lg max-w-2xl mx-auto">
-              Snel, betrouwbaar en transparant. Geen account nodig.
-            </p>
+        <section className="hero-gradient text-primary-foreground py-10 md:py-14 lg:py-16">
+          <div className="container">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-center max-w-3xl mx-auto"
+            >
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.1 }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm text-sm font-medium mb-4"
+              >
+                <span className="inline-block h-2 w-2 rounded-full bg-success animate-pulse" />
+                24/7 Storingsdienst beschikbaar
+              </motion.div>
+              <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold mb-3 md:mb-4 leading-tight">
+                Professionele Elektricien
+                <br className="hidden sm:block" />
+                <span className="text-primary-foreground/90"> Direct Boeken</span>
+              </h1>
+              <p className="text-primary-foreground/80 text-base md:text-lg max-w-2xl mx-auto">
+                Snel, betrouwbaar en transparant. Geen account nodig.
+              </p>
+            </motion.div>
           </div>
         </section>
 
-        {/* Progress */}
-        <div className="border-b border-border bg-card">
-          <div className="container py-4">
-            <div className="flex items-center justify-center gap-2 text-sm">
-              {[1, 2, 3].map((s) => (
-                <div key={s} className="flex items-center">
-                  <div className={cn(
-                    "w-8 h-8 rounded-full flex items-center justify-center font-medium",
-                    step >= s 
-                      ? "bg-primary text-primary-foreground" 
-                      : "bg-muted text-muted-foreground"
-                  )}>
-                    {step > s ? <CheckCircle className="h-5 w-5" /> : s}
+        {/* Trust Indicators - Mobile visible */}
+        <div className="border-b border-border bg-card py-4">
+          <div className="container">
+            <div className="flex items-center justify-center gap-4 md:gap-8 overflow-x-auto pb-1">
+              {trustIndicators.map((item, idx) => (
+                <motion.div 
+                  key={idx}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 * idx }}
+                  className="flex items-center gap-2 shrink-0"
+                >
+                  <div className="p-1.5 rounded-full bg-primary/10">
+                    <item.icon className="h-4 w-4 text-primary" />
                   </div>
-                  {s < 3 && (
+                  <div className="text-xs md:text-sm">
+                    <p className="font-semibold text-foreground leading-tight">{item.label}</p>
+                    <p className="text-muted-foreground leading-tight">{item.sublabel}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Progress */}
+        <div className="border-b border-border bg-background sticky top-16 z-40">
+          <div className="container py-4">
+            <div className="flex items-center justify-center gap-1 sm:gap-2">
+              {[
+                { num: 1, label: "Type" },
+                { num: 2, label: "Details" },
+                { num: 3, label: "Gegevens" },
+              ].map((s, idx) => (
+                <div key={s.num} className="flex items-center">
+                  <motion.div 
+                    className="flex items-center gap-1.5 sm:gap-2"
+                    animate={{
+                      scale: step === s.num ? 1.05 : 1,
+                    }}
+                    transition={{ type: "spring", stiffness: 300 }}
+                  >
                     <div className={cn(
-                      "w-12 md:w-24 h-0.5 mx-2",
-                      step > s ? "bg-primary" : "bg-muted"
+                      "w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-medium text-sm transition-all duration-300",
+                      step >= s.num 
+                        ? "bg-primary text-primary-foreground shadow-md" 
+                        : "bg-muted text-muted-foreground"
+                    )}>
+                      {step > s.num ? <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" /> : s.num}
+                    </div>
+                    <span className={cn(
+                      "text-xs sm:text-sm font-medium hidden sm:block",
+                      step >= s.num ? "text-foreground" : "text-muted-foreground"
+                    )}>
+                      {s.label}
+                    </span>
+                  </motion.div>
+                  {idx < 2 && (
+                    <div className={cn(
+                      "w-8 sm:w-12 md:w-20 h-0.5 mx-1 sm:mx-2 transition-colors duration-300",
+                      step > s.num ? "bg-primary" : "bg-muted"
                     )} />
                   )}
                 </div>
@@ -308,364 +395,458 @@ export default function Book() {
         </div>
 
         {/* Form */}
-        <div className="container py-8 md:py-12">
+        <div className="container py-6 md:py-10 lg:py-12">
           <div className="max-w-3xl mx-auto">
-
-            {/* Step 1: Type Selection */}
-            {step === 1 && (
-              <div className="animate-fade-in space-y-6">
-                <div className="text-center mb-8">
-                  <h2 className="font-display text-2xl font-bold mb-2">
-                    Wat is je situatie?
-                  </h2>
-                  <p className="text-muted-foreground">
-                    Kies het type afspraak dat je nodig hebt
-                  </p>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-4">
-                  {/* Emergency */}
-                  <button
-                    onClick={() => {
-                      setBookingType("emergency");
-                      setStep(2);
-                    }}
-                    className={cn(
-                      "group p-6 rounded-xl border-2 text-left transition-all hover:shadow-lg",
-                      "border-emergency/30 bg-emergency-light hover:border-emergency"
-                    )}
-                  >
-                    <div className="flex items-start gap-4">
-                      <div className="p-3 rounded-lg bg-emergency text-emergency-foreground">
-                        <AlertTriangle className="h-6 w-6" />
-                      </div>
-                      <div>
-                        <h3 className="font-display font-bold text-lg text-foreground mb-1">
-                          SPOED
-                        </h3>
-                        <p className="text-sm text-muted-foreground mb-3">
-                          Directe hulp nodig? Wij zijn er binnen 30 minuten.
-                        </p>
-                        <ul className="space-y-1 text-sm text-muted-foreground">
-                          {emergencyServices.map((s) => (
-                            <li key={s} className="flex items-center gap-2">
-                              <Zap className="h-3 w-3 text-emergency" />
-                              {s}
-                            </li>
-                          ))}
-                        </ul>
-                        <p className="mt-4 text-emergency font-semibold">
-                          Vanaf €125
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-
-                  {/* Planned */}
-                  <button
-                    onClick={() => {
-                      setBookingType("planned");
-                      setStep(2);
-                    }}
-                    className={cn(
-                      "group p-6 rounded-xl border-2 text-left transition-all hover:shadow-lg",
-                      "border-border bg-card hover:border-primary"
-                    )}
-                  >
-                    <div className="flex items-start gap-4">
-                      <div className="p-3 rounded-lg bg-primary text-primary-foreground">
-                        <CalendarIcon className="h-6 w-6" />
-                      </div>
-                      <div>
-                        <h3 className="font-display font-bold text-lg text-foreground mb-1">
-                          Gepland
-                        </h3>
-                        <p className="text-sm text-muted-foreground mb-3">
-                          Plan een afspraak op een moment dat jou uitkomt.
-                        </p>
-                        <ul className="space-y-1 text-sm text-muted-foreground">
-                          <li className="flex items-center gap-2">
-                            <CheckCircle className="h-3 w-3 text-success" />
-                            Kies je eigen datum
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <CheckCircle className="h-3 w-3 text-success" />
-                            Ochtend, middag of avond
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <CheckCircle className="h-3 w-3 text-success" />
-                            Lagere tarieven
-                          </li>
-                        </ul>
-                        <p className="mt-4 text-primary font-semibold">
-                          Vanaf €68
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                </div>
-
-                {/* Emergency CTA */}
-                <div className="mt-8 p-4 rounded-xl bg-muted/50 text-center">
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Liever direct bellen?
-                  </p>
-                  <a
-                    href="tel:+31201234567"
-                    className="inline-flex items-center gap-2 text-emergency font-semibold hover:underline"
-                  >
-                    <Phone className="h-4 w-4" />
-                    020 - 123 4567
-                  </a>
-                </div>
-              </div>
-            )}
-
-            {/* Step 2: Service & Schedule */}
-            {step === 2 && (
-              <div className="animate-fade-in space-y-6">
-                <div className="text-center mb-8">
-                  <h2 className="font-display text-2xl font-bold mb-2">
-                    {bookingType === "emergency" ? "Wat is het probleem?" : "Wat wil je laten doen?"}
-                  </h2>
-                  <p className="text-muted-foreground">
-                    Selecteer de dienst {bookingType === "planned" && "en kies een datum"}
-                  </p>
-                </div>
-
-                <div className="space-y-6">
-                  {/* Service Selection */}
-                  <div className="space-y-3">
-                    <Label className="text-base font-semibold">Dienst selecteren</Label>
-                    <RadioGroup value={selectedService || ""} onValueChange={setSelectedService}>
-                      <div className="grid gap-3">
-                        {filteredServices.map((service) => (
-                          <label
-                            key={service.id}
-                            className={cn(
-                              "flex items-center justify-between p-4 rounded-lg border-2 cursor-pointer transition-all",
-                              selectedService === service.id
-                                ? "border-primary bg-primary/5"
-                                : "border-border hover:border-primary/50"
-                            )}
-                          >
-                            <div className="flex items-center gap-3">
-                              <RadioGroupItem value={service.id} />
-                              <div>
-                                <p className="font-medium">{service.name_nl}</p>
-                                {service.description && (
-                                  <p className="text-sm text-muted-foreground">
-                                    {service.description}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                            <span className="font-semibold text-primary">
-                              €{Number(service.base_price).toFixed(0)}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    </RadioGroup>
-                    
-                    {/* Pricing hint */}
-                    <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground">
-                      <Info className="h-4 w-4 mt-0.5 shrink-0" />
-                      <span>
-                        Getoonde prijzen zijn basistarieven. Je ziet hieronder altijd de volledige prijsopbouw met toeslagen en korting.
-                      </span>
-                    </div>
+            <AnimatePresence mode="wait">
+              {/* Step 1: Type Selection */}
+              {step === 1 && (
+                <motion.div
+                  key="step1"
+                  variants={fadeInUp}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={{ duration: 0.3 }}
+                  className="space-y-6"
+                >
+                  <div className="text-center mb-6 md:mb-8">
+                    <h2 className="font-display text-xl sm:text-2xl font-bold mb-2">
+                      Wat is je situatie?
+                    </h2>
+                    <p className="text-muted-foreground text-sm sm:text-base">
+                      Kies het type afspraak dat je nodig hebt
+                    </p>
                   </div>
 
-                  {/* Date & Time (Planned only) */}
-                  {bookingType === "planned" && (
-                    <>
-                      <div className="space-y-3">
-                        <Label className="text-base font-semibold">Datum kiezen</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                "w-full justify-start text-left font-normal h-12",
-                                !date && "text-muted-foreground"
-                              )}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {date ? format(date, "EEEE d MMMM yyyy", { locale: nl }) : "Selecteer een datum"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={date}
-                              onSelect={setDate}
-                              disabled={(date) => date < new Date()}
-                              initialFocus
-                              className="p-3 pointer-events-auto"
-                            />
-                          </PopoverContent>
-                        </Popover>
+                  <motion.div 
+                    variants={staggerContainer}
+                    initial="initial"
+                    animate="animate"
+                    className="grid gap-4"
+                  >
+                    {/* Emergency */}
+                    <motion.button
+                      variants={fadeInUp}
+                      onClick={() => {
+                        setBookingType("emergency");
+                        setStep(2);
+                      }}
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                      className={cn(
+                        "group p-5 md:p-6 rounded-2xl border-2 text-left transition-all",
+                        "border-emergency/30 bg-gradient-to-br from-emergency-light to-emergency-light/50 hover:border-emergency hover:shadow-lg hover:shadow-emergency/10"
+                      )}
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="p-3 rounded-xl bg-emergency text-emergency-foreground shrink-0">
+                          <AlertTriangle className="h-6 w-6" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-display font-bold text-lg text-foreground">
+                              SPOED
+                            </h3>
+                            <span className="px-2 py-0.5 rounded-full bg-emergency/20 text-emergency text-xs font-semibold">
+                              30 min
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-3">
+                            Directe hulp nodig? Wij zijn er binnen 30 minuten.
+                          </p>
+                          <div className="flex flex-wrap gap-2 mb-4">
+                            {emergencyServices.map((s) => (
+                              <span key={s} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emergency/10 text-xs text-foreground">
+                                <Zap className="h-3 w-3 text-emergency" />
+                                {s}
+                              </span>
+                            ))}
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <p className="text-emergency font-bold text-lg">
+                              Vanaf €125
+                            </p>
+                            <ArrowRight className="h-5 w-5 text-emergency opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        </div>
                       </div>
+                    </motion.button>
 
-                      <div className="space-y-3">
-                        <Label className="text-base font-semibold">Tijdslot kiezen</Label>
-                        <div className="grid grid-cols-3 gap-3">
-                          {timeSlots.map((slot) => (
-                            <button
-                              key={slot.value}
-                              type="button"
-                              onClick={() => setTimeSlot(slot.value)}
+                    {/* Planned */}
+                    <motion.button
+                      variants={fadeInUp}
+                      onClick={() => {
+                        setBookingType("planned");
+                        setStep(2);
+                      }}
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                      className={cn(
+                        "group p-5 md:p-6 rounded-2xl border-2 text-left transition-all",
+                        "border-border bg-card hover:border-primary hover:shadow-lg hover:shadow-primary/10"
+                      )}
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="p-3 rounded-xl bg-primary text-primary-foreground shrink-0">
+                          <CalendarIcon className="h-6 w-6" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-display font-bold text-lg text-foreground">
+                              Gepland
+                            </h3>
+                            <span className="px-2 py-0.5 rounded-full bg-success/20 text-success text-xs font-semibold">
+                              -10% korting
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-3">
+                            Plan een afspraak op een moment dat jou uitkomt.
+                          </p>
+                          <div className="space-y-1.5 mb-4">
+                            {[
+                              "Kies je eigen datum",
+                              "Ochtend, middag of avond",
+                              "Lagere tarieven",
+                            ].map((item) => (
+                              <div key={item} className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <CheckCircle className="h-4 w-4 text-success shrink-0" />
+                                {item}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <p className="text-primary font-bold text-lg">
+                              Vanaf €68
+                            </p>
+                            <ArrowRight className="h-5 w-5 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        </div>
+                      </div>
+                    </motion.button>
+                  </motion.div>
+
+                  {/* Emergency CTA */}
+                  <motion.div 
+                    variants={fadeInUp}
+                    className="p-4 rounded-xl bg-muted/50 text-center"
+                  >
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Liever direct bellen?
+                    </p>
+                    <a
+                      href="tel:+31201234567"
+                      className="inline-flex items-center gap-2 text-emergency font-semibold hover:underline text-lg"
+                    >
+                      <Phone className="h-5 w-5" />
+                      020 - 123 4567
+                    </a>
+                  </motion.div>
+                </motion.div>
+              )}
+
+              {/* Step 2: Service & Schedule */}
+              {step === 2 && (
+                <motion.div
+                  key="step2"
+                  variants={fadeInUp}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={{ duration: 0.3 }}
+                  className="space-y-6"
+                >
+                  <div className="text-center mb-6 md:mb-8">
+                    <h2 className="font-display text-xl sm:text-2xl font-bold mb-2">
+                      {bookingType === "emergency" ? "Wat is het probleem?" : "Wat wil je laten doen?"}
+                    </h2>
+                    <p className="text-muted-foreground text-sm sm:text-base">
+                      Selecteer de dienst {bookingType === "planned" && "en kies een datum"}
+                    </p>
+                  </div>
+
+                  <div className="space-y-6">
+                    {/* Service Selection */}
+                    <div className="space-y-3">
+                      <Label className="text-base font-semibold">Dienst selecteren</Label>
+                      <RadioGroup value={selectedService || ""} onValueChange={setSelectedService}>
+                        <div className="grid gap-3">
+                          {filteredServices.map((service) => (
+                            <motion.label
+                              key={service.id}
+                              whileHover={{ scale: 1.01 }}
+                              whileTap={{ scale: 0.99 }}
                               className={cn(
-                                "p-4 rounded-lg border-2 text-center transition-all",
-                                timeSlot === slot.value
-                                  ? "border-primary bg-primary/5"
+                                "flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all",
+                                selectedService === service.id
+                                  ? "border-primary bg-primary/5 shadow-sm"
                                   : "border-border hover:border-primary/50"
                               )}
                             >
-                              <p className="font-medium">{slot.label}</p>
-                              <p className="text-sm text-muted-foreground">{slot.time}</p>
-                              {slot.value === "evening" && (
-                                <p className="text-xs text-muted-foreground mt-1">+25%</p>
-                              )}
-                            </button>
+                              <div className="flex items-center gap-3">
+                                <RadioGroupItem value={service.id} className="shrink-0" />
+                                <div>
+                                  <p className="font-medium text-foreground">{service.name_nl}</p>
+                                  {service.description && (
+                                    <p className="text-sm text-muted-foreground line-clamp-1">
+                                      {service.description}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              <span className="font-bold text-primary shrink-0 ml-2">
+                                €{Number(service.base_price).toFixed(0)}
+                              </span>
+                            </motion.label>
                           ))}
                         </div>
-                      </div>
-                    </>
-                  )}
-
-                  {/* Emergency notice */}
-                  {bookingType === "emergency" && (
-                    <div className="p-4 rounded-xl bg-emergency-light border border-emergency/30">
-                      <div className="flex items-start gap-3">
-                        <Clock className="h-5 w-5 text-emergency mt-0.5" />
-                        <div>
-                          <p className="font-semibold text-foreground">
-                            ASAP – Binnen 30 minuten
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Een monteur wordt direct naar je toe gestuurd
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Live Price Breakdown */}
-                  {priceBreakdown && (
-                    <PriceBreakdownCard
-                      breakdown={priceBreakdown}
-                      bookingType={bookingType!}
-                      compact
-                    />
-                  )}
-                </div>
-
-                <div className="flex gap-3 pt-4">
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setStep(1)}
-                    className="flex-1"
-                  >
-                    Terug
-                  </Button>
-                  <Button 
-                    onClick={() => setStep(3)}
-                    disabled={!selectedService || (bookingType === "planned" && (!date || !timeSlot))}
-                    className="flex-1"
-                  >
-                    Volgende
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3: Guest Details & Confirm */}
-            {step === 3 && selectedServiceData && priceBreakdown && (
-              <div className="animate-fade-in">
-                <div className="text-center mb-8">
-                  <h2 className="font-display text-2xl font-bold mb-2">
-                    Vul je gegevens in
-                  </h2>
-                  <p className="text-muted-foreground">
-                    Geen account nodig – we nemen direct contact met je op
-                  </p>
-                </div>
-
-                <div className="grid lg:grid-cols-3 gap-8">
-                  {/* Form */}
-                  <div className="lg:col-span-2">
-                    <GuestBookingForm
-                      serviceId={selectedService!}
-                      serviceName={selectedServiceData.name_nl}
-                      bookingType={bookingType!}
-                      scheduledDate={date ? format(date, "yyyy-MM-dd") : null}
-                      timeSlot={timeSlot}
-                      basePrice={Number(selectedServiceData.base_price)}
-                      finalPrice={priceBreakdown.total}
-                      priceBreakdown={priceBreakdown}
-                      onSuccess={handleBookingSuccess}
-                      onBack={() => setStep(2)}
-                    />
-                  </div>
-
-                  {/* Summary Sidebar */}
-                  <div className="space-y-4">
-                    <div className="bg-card rounded-xl border border-border p-6 space-y-4 sticky top-4">
-                      <h3 className="font-display font-bold text-lg">Samenvatting</h3>
+                      </RadioGroup>
                       
-                      <div className="space-y-3 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Type</span>
-                          <span className={cn(
-                            "font-medium",
-                            bookingType === "emergency" && "text-emergency"
-                          )}>
-                            {bookingType === "emergency" ? "SPOED" : "Gepland"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Dienst</span>
-                          <span className="font-medium">{selectedServiceData.name_nl}</span>
-                        </div>
-                        {bookingType === "planned" && date && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Datum</span>
-                            <span className="font-medium">
-                              {format(date, "d MMMM", { locale: nl })}
-                            </span>
-                          </div>
-                        )}
-                        {bookingType === "planned" && timeSlot && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Tijd</span>
-                            <span className="font-medium">
-                              {timeSlots.find(t => t.value === timeSlot)?.label}
-                            </span>
-                          </div>
-                        )}
-                        {bookingType === "emergency" && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Wanneer</span>
-                            <span className="font-medium text-emergency">
-                              Binnen 30 min
-                            </span>
-                          </div>
-                        )}
+                      {/* Pricing hint */}
+                      <div className="flex items-start gap-2 p-3 rounded-xl bg-muted/50 text-xs text-muted-foreground">
+                        <Info className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
+                        <span>
+                          Getoonde prijzen zijn basistarieven. Je ziet hieronder altijd de volledige prijsopbouw met toeslagen en korting.
+                        </span>
                       </div>
                     </div>
 
-                    {/* Price Breakdown in Sidebar */}
-                    <PriceBreakdownCard
-                      breakdown={priceBreakdown}
-                      bookingType={bookingType!}
-                    />
+                    {/* Date & Time (Planned only) */}
+                    {bookingType === "planned" && (
+                      <>
+                        <div className="space-y-3">
+                          <Label className="text-base font-semibold">Datum kiezen</Label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal h-12 rounded-xl border-2",
+                                  !date && "text-muted-foreground",
+                                  date && "border-primary bg-primary/5"
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {date ? format(date, "EEEE d MMMM yyyy", { locale: nl }) : "Selecteer een datum"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={date}
+                                onSelect={setDate}
+                                disabled={(date) => date < new Date()}
+                                initialFocus
+                                className="p-3 pointer-events-auto"
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+
+                        <div className="space-y-3">
+                          <Label className="text-base font-semibold">Tijdslot kiezen</Label>
+                          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                            {timeSlots.map((slot) => (
+                              <motion.button
+                                key={slot.value}
+                                type="button"
+                                onClick={() => setTimeSlot(slot.value)}
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                className={cn(
+                                  "p-3 sm:p-4 rounded-xl border-2 text-center transition-all",
+                                  timeSlot === slot.value
+                                    ? "border-primary bg-primary/5 shadow-sm"
+                                    : "border-border hover:border-primary/50"
+                                )}
+                              >
+                                <div className="text-xl mb-1">{slot.icon}</div>
+                                <p className="font-medium text-sm sm:text-base">{slot.label}</p>
+                                <p className="text-xs text-muted-foreground">{slot.time}</p>
+                                {slot.value === "evening" && (
+                                  <p className="text-xs text-emergency font-medium mt-1">+25%</p>
+                                )}
+                              </motion.button>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Emergency notice */}
+                    {bookingType === "emergency" && (
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="p-4 rounded-xl bg-emergency-light border-2 border-emergency/30"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 rounded-lg bg-emergency/20">
+                            <Clock className="h-5 w-5 text-emergency" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-foreground">
+                              ASAP – Binnen 30 minuten
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Een monteur wordt direct naar je toe gestuurd
+                            </p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {/* Live Price Breakdown */}
+                    {priceBreakdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                      >
+                        <PriceBreakdownCard
+                          breakdown={priceBreakdown}
+                          bookingType={bookingType!}
+                          compact
+                        />
+                      </motion.div>
+                    )}
                   </div>
-                </div>
-              </div>
-            )}
+
+                  <div className="flex gap-3 pt-4">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setStep(1)}
+                      className="flex-1 h-12 rounded-xl"
+                    >
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Terug
+                    </Button>
+                    <Button 
+                      onClick={() => setStep(3)}
+                      disabled={!selectedService || (bookingType === "planned" && (!date || !timeSlot))}
+                      className={cn(
+                        "flex-1 h-12 rounded-xl font-semibold",
+                        bookingType === "emergency" && "bg-emergency hover:bg-emergency/90"
+                      )}
+                    >
+                      Volgende
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Step 3: Guest Details & Confirm */}
+              {step === 3 && selectedServiceData && priceBreakdown && (
+                <motion.div
+                  key="step3"
+                  variants={fadeInUp}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={{ duration: 0.3 }}
+                >
+                  <div className="text-center mb-6 md:mb-8">
+                    <h2 className="font-display text-xl sm:text-2xl font-bold mb-2">
+                      Vul je gegevens in
+                    </h2>
+                    <p className="text-muted-foreground text-sm sm:text-base">
+                      Geen account nodig – we nemen direct contact met je op
+                    </p>
+                  </div>
+
+                  <div className="grid lg:grid-cols-3 gap-6 lg:gap-8">
+                    {/* Form */}
+                    <div className="lg:col-span-2">
+                      <GuestBookingForm
+                        serviceId={selectedService!}
+                        serviceName={selectedServiceData.name_nl}
+                        bookingType={bookingType!}
+                        scheduledDate={date ? format(date, "yyyy-MM-dd") : null}
+                        timeSlot={timeSlot}
+                        basePrice={Number(selectedServiceData.base_price)}
+                        finalPrice={priceBreakdown.total}
+                        priceBreakdown={priceBreakdown}
+                        onSuccess={handleBookingSuccess}
+                        onBack={() => setStep(2)}
+                      />
+                    </div>
+
+                    {/* Summary Sidebar - Hidden on mobile, shown at bottom */}
+                    <div className="hidden lg:block space-y-4">
+                      <div className="bg-card rounded-2xl border border-border p-6 space-y-4 sticky top-32">
+                        <h3 className="font-display font-bold text-lg">Samenvatting</h3>
+                        
+                        <div className="space-y-3 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Type</span>
+                            <span className={cn(
+                              "font-medium",
+                              bookingType === "emergency" && "text-emergency"
+                            )}>
+                              {bookingType === "emergency" ? "SPOED" : "Gepland"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Dienst</span>
+                            <span className="font-medium text-right">{selectedServiceData.name_nl}</span>
+                          </div>
+                          {bookingType === "planned" && date && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Datum</span>
+                              <span className="font-medium">
+                                {format(date, "d MMMM", { locale: nl })}
+                              </span>
+                            </div>
+                          )}
+                          {bookingType === "planned" && timeSlot && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Tijd</span>
+                              <span className="font-medium">
+                                {timeSlots.find(t => t.value === timeSlot)?.label}
+                              </span>
+                            </div>
+                          )}
+                          {bookingType === "emergency" && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Wanneer</span>
+                              <span className="font-medium text-emergency">
+                                Binnen 30 min
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Price Breakdown in Sidebar */}
+                      <PriceBreakdownCard
+                        breakdown={priceBreakdown}
+                        bookingType={bookingType!}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Mobile Price Summary - Sticky at bottom */}
+                  <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur-sm border-t border-border z-50">
+                    <div className="flex items-center justify-between max-w-3xl mx-auto">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Totaal (incl. BTW)</p>
+                        <p className={cn(
+                          "text-2xl font-bold",
+                          bookingType === "emergency" ? "text-emergency" : "text-primary"
+                        )}>
+                          €{priceBreakdown.total.toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Shield className="h-4 w-4 text-success" />
+                        Geen verborgen kosten
+                      </div>
+                    </div>
+                  </div>
+                  {/* Spacer for fixed bottom bar on mobile */}
+                  <div className="h-24 lg:hidden" />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </main>
