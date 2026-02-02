@@ -29,7 +29,9 @@ import {
   Info,
   Shield,
   Star,
-  Users
+  Users,
+  X,
+  Camera
 } from "lucide-react";
 
 type BookingType = "emergency" | "planned";
@@ -43,6 +45,17 @@ interface ServiceType {
   base_price: number;
   is_emergency_eligible: boolean;
 }
+
+// Emergency service options (hardcoded for now)
+const EMERGENCY_SERVICES = [
+  { id: "stroomstoring", label: "Stroomstoring", icon: "⚡" },
+  { id: "kortsluiting", label: "Kortsluiting", icon: "💥" },
+  { id: "brandlucht", label: "Brandlucht", icon: "🔥" },
+  { id: "water-meterkast", label: "Water in meterkast", icon: "💧" },
+  { id: "anders", label: "Anders", icon: "❓" },
+];
+
+const EMERGENCY_HOURLY_RATE = 120; // €120 ex BTW per eerste uur
 
 // ========== PRICING CONFIG ==========
 const PRICING = {
@@ -125,12 +138,7 @@ const timeSlots = [
   { value: "evening" as TimeSlot, label: "Avond", time: "17:00 - 21:00", icon: "🌙" },
 ];
 
-const emergencyServices = [
-  "Stroomstoring",
-  "Kortsluiting",
-  "Brandlucht",
-  "Water in meterkast",
-];
+// Old list removed - now using EMERGENCY_SERVICES with icons
 
 const trustIndicators = [
   { icon: Shield, label: "Gecertificeerd", sublabel: "NEN 3140" },
@@ -174,6 +182,11 @@ export default function Book() {
   const [loading, setLoading] = useState(false);
   const [bookingComplete, setBookingComplete] = useState(false);
   const [bookingData, setBookingData] = useState<BookingData | null>(null);
+  
+  // Emergency specific state
+  const [selectedEmergencyService, setSelectedEmergencyService] = useState<string | null>(null);
+  const [emergencyDescription, setEmergencyDescription] = useState("");
+  const [emergencyPhotos, setEmergencyPhotos] = useState<File[]>([]);
 
   useEffect(() => {
     fetchServices();
@@ -413,9 +426,9 @@ export default function Book() {
           <div className="max-w-3xl mx-auto">
             <AnimatePresence mode="wait">
               {/* Step 1: Type Selection */}
-              {step === 1 && (
+              {step === 1 && !bookingType && (
                 <motion.div
-                  key="step1"
+                  key="step1-choice"
                   variants={fadeInUp}
                   initial="initial"
                   animate="animate"
@@ -441,10 +454,7 @@ export default function Book() {
                     {/* Emergency */}
                     <motion.button
                       variants={fadeInUp}
-                      onClick={() => {
-                        setBookingType("emergency");
-                        setStep(2);
-                      }}
+                      onClick={() => setBookingType("emergency")}
                       whileHover={{ scale: 1.01 }}
                       whileTap={{ scale: 0.99 }}
                       className={cn(
@@ -469,16 +479,16 @@ export default function Book() {
                             Directe hulp nodig? Wij zijn er binnen 30 minuten.
                           </p>
                           <div className="flex flex-wrap gap-2 mb-4">
-                            {emergencyServices.map((s) => (
-                              <span key={s} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emergency/10 text-xs text-foreground">
+                            {EMERGENCY_SERVICES.slice(0, 4).map((s) => (
+                              <span key={s.id} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emergency/10 text-xs text-foreground">
                                 <Zap className="h-3 w-3 text-emergency" />
-                                {s}
+                                {s.label}
                               </span>
                             ))}
                           </div>
                           <div className="flex items-center justify-between">
                             <p className="text-emergency font-bold text-lg">
-                              Vanaf €125
+                              €{EMERGENCY_HOURLY_RATE} <span className="text-sm font-normal text-muted-foreground">excl. BTW / eerste uur</span>
                             </p>
                             <ArrowRight className="h-5 w-5 text-emergency opacity-0 group-hover:opacity-100 transition-opacity" />
                           </div>
@@ -555,6 +565,174 @@ export default function Book() {
                       020 - 123 4567
                     </a>
                   </motion.div>
+                </motion.div>
+              )}
+
+              {/* Step 1: Emergency Service Selection */}
+              {step === 1 && bookingType === "emergency" && (
+                <motion.div
+                  key="step1-emergency"
+                  variants={fadeInUp}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={{ duration: 0.3 }}
+                  className="space-y-6"
+                >
+                  {/* Phone CTA at top */}
+                  <motion.a
+                    href="tel:+31201234567"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="flex items-center justify-center gap-3 p-4 rounded-2xl bg-emergency text-emergency-foreground font-bold text-lg shadow-lg shadow-emergency/20"
+                  >
+                    <Phone className="h-6 w-6" />
+                    <span>Bel direct: 020 - 123 4567</span>
+                  </motion.a>
+
+                  <div className="text-center">
+                    <p className="text-muted-foreground text-sm">
+                      Of selecteer hieronder je storing om online door te gaan
+                    </p>
+                  </div>
+
+                  <div className="text-center mb-4">
+                    <h2 className="font-display text-xl sm:text-2xl font-bold mb-2">
+                      Wat is het probleem?
+                    </h2>
+                  </div>
+
+                  {/* Emergency Services Grid */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {EMERGENCY_SERVICES.map((service) => (
+                      <motion.button
+                        key={service.id}
+                        type="button"
+                        onClick={() => setSelectedEmergencyService(service.id)}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className={cn(
+                          "p-4 rounded-xl border-2 text-center transition-all",
+                          selectedEmergencyService === service.id
+                            ? "border-emergency bg-emergency/10 shadow-md"
+                            : "border-border hover:border-emergency/50"
+                        )}
+                      >
+                        <div className="text-2xl mb-2">{service.icon}</div>
+                        <p className="font-medium text-sm">{service.label}</p>
+                      </motion.button>
+                    ))}
+                  </div>
+
+                  {/* Optional description - shown for all services */}
+                  {selectedEmergencyService && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      className="space-y-4"
+                    >
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">
+                          Beschrijf je storing{" "}
+                          <span className="text-muted-foreground font-normal">(optioneel)</span>
+                        </Label>
+                        <textarea
+                          value={emergencyDescription}
+                          onChange={(e) => setEmergencyDescription(e.target.value)}
+                          placeholder={selectedEmergencyService === "anders" 
+                            ? "Beschrijf hier wat er aan de hand is..."
+                            : "Extra informatie die kan helpen (optioneel)..."}
+                          className="flex min-h-[100px] w-full rounded-xl border-2 border-input bg-background px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                      </div>
+
+                      {/* Optional photo upload */}
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">
+                          Foto toevoegen{" "}
+                          <span className="text-muted-foreground font-normal">(optioneel, max 3)</span>
+                        </Label>
+                        <div className="flex flex-wrap gap-3">
+                          {emergencyPhotos.map((photo, idx) => (
+                            <div key={idx} className="relative">
+                              <img
+                                src={URL.createObjectURL(photo)}
+                                alt={`Foto ${idx + 1}`}
+                                className="w-20 h-20 rounded-lg object-cover border-2 border-border"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setEmergencyPhotos(prev => prev.filter((_, i) => i !== idx))}
+                                className="absolute -top-2 -right-2 p-1 rounded-full bg-destructive text-destructive-foreground shadow-md"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                          {emergencyPhotos.length < 3 && (
+                            <label className="w-20 h-20 rounded-lg border-2 border-dashed border-border hover:border-primary/50 flex items-center justify-center cursor-pointer transition-colors">
+                              <Camera className="h-6 w-6 text-muted-foreground" />
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    setEmergencyPhotos(prev => [...prev, file]);
+                                  }
+                                  e.target.value = "";
+                                }}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Pricing info */}
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="p-4 rounded-xl bg-muted/50 space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">Tarief eerste uur</span>
+                      <span className="font-bold text-emergency text-lg">
+                        €{EMERGENCY_HOURLY_RATE} <span className="text-sm font-normal text-muted-foreground">excl. BTW</span>
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      90% van de storingen wordt binnen dit eerste uur gediagnosticeerd én opgelost. Mocht er meer tijd of materiaal nodig zijn, dan laat de elektricien dit altijd vooraf weten.
+                    </p>
+                  </motion.div>
+
+                  <div className="flex gap-3 pt-4">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setBookingType(null);
+                        setSelectedEmergencyService(null);
+                        setEmergencyDescription("");
+                        setEmergencyPhotos([]);
+                      }}
+                      className="flex-1 h-12 rounded-xl"
+                    >
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Terug
+                    </Button>
+                    <Button 
+                      onClick={() => setStep(2)}
+                      disabled={!selectedEmergencyService}
+                      className="flex-1 h-12 rounded-xl font-semibold bg-emergency hover:bg-emergency/90"
+                    >
+                      Volgende
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
                 </motion.div>
               )}
 
