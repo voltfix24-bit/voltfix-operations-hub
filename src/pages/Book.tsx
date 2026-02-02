@@ -215,11 +215,21 @@ export default function Book() {
   );
 
   const selectedServiceData = services.find(s => s.id === selectedService);
+  
+  // Get the selected emergency service label
+  const selectedEmergencyServiceData = EMERGENCY_SERVICES.find(s => s.id === selectedEmergencyService);
 
-  const priceBreakdown = selectedServiceData && bookingType
+  // Build price breakdown - different logic for emergency vs planned
+  const priceBreakdown = bookingType === "emergency" && selectedEmergencyService
+    ? buildPriceBreakdown({
+        basePrice: EMERGENCY_HOURLY_RATE,
+        bookingType: "emergency",
+        timeSlot: null,
+      })
+    : selectedServiceData && bookingType === "planned"
     ? buildPriceBreakdown({
         basePrice: Number(selectedServiceData.base_price),
-        bookingType,
+        bookingType: "planned",
         timeSlot,
       })
     : null;
@@ -737,7 +747,7 @@ export default function Book() {
                       Terug
                     </Button>
                     <Button 
-                      onClick={() => setStep(2)}
+                      onClick={() => setStep(3)}
                       disabled={!selectedEmergencyService}
                       className="flex-1 h-12 rounded-xl font-semibold bg-emergency hover:bg-emergency/90"
                     >
@@ -748,8 +758,8 @@ export default function Book() {
                 </motion.div>
               )}
 
-              {/* Step 2: Service & Schedule */}
-              {step === 2 && (
+              {/* Step 2: Service & Schedule (Planned bookings only) */}
+              {step === 2 && bookingType === "planned" && (
                 <motion.div
                   key="step2"
                   variants={fadeInUp}
@@ -761,10 +771,10 @@ export default function Book() {
                 >
                   <div className="text-center mb-6 md:mb-8">
                     <h2 className="font-display text-xl sm:text-2xl font-bold mb-2">
-                      {bookingType === "emergency" ? "Wat is het probleem?" : "Wat wil je laten doen?"}
+                      Wat wil je laten doen?
                     </h2>
                     <p className="text-muted-foreground text-sm sm:text-base">
-                      Selecteer de dienst {bookingType === "planned" && "en kies een datum"}
+                      Selecteer de dienst en kies een datum
                     </p>
                   </div>
 
@@ -814,90 +824,63 @@ export default function Book() {
                       </div>
                     </div>
 
-                    {/* Date & Time (Planned only) */}
-                    {bookingType === "planned" && (
-                      <>
-                        <div className="space-y-3">
-                          <Label className="text-base font-semibold">Datum kiezen</Label>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                className={cn(
-                                  "w-full justify-start text-left font-normal h-12 rounded-xl border-2",
-                                  !date && "text-muted-foreground",
-                                  date && "border-primary bg-primary/5"
-                                )}
-                              >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {date ? format(date, "EEEE d MMMM yyyy", { locale: nl }) : "Selecteer een datum"}
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                              <Calendar
-                                mode="single"
-                                selected={date}
-                                onSelect={setDate}
-                                disabled={(date) => date < new Date()}
-                                initialFocus
-                                className="p-3 pointer-events-auto"
-                              />
-                            </PopoverContent>
-                          </Popover>
-                        </div>
+                    {/* Date & Time */}
+                    <div className="space-y-3">
+                      <Label className="text-base font-semibold">Datum kiezen</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal h-12 rounded-xl border-2",
+                              !date && "text-muted-foreground",
+                              date && "border-primary bg-primary/5"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {date ? format(date, "EEEE d MMMM yyyy", { locale: nl }) : "Selecteer een datum"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={date}
+                            onSelect={setDate}
+                            disabled={(date) => date < new Date()}
+                            initialFocus
+                            className="p-3 pointer-events-auto"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
 
-                        <div className="space-y-3">
-                          <Label className="text-base font-semibold">Tijdslot kiezen</Label>
-                          <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                            {timeSlots.map((slot) => (
-                              <motion.button
-                                key={slot.value}
-                                type="button"
-                                onClick={() => setTimeSlot(slot.value)}
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                                className={cn(
-                                  "p-3 sm:p-4 rounded-xl border-2 text-center transition-all",
-                                  timeSlot === slot.value
-                                    ? "border-primary bg-primary/5 shadow-sm"
-                                    : "border-border hover:border-primary/50"
-                                )}
-                              >
-                                <div className="text-xl mb-1">{slot.icon}</div>
-                                <p className="font-medium text-sm sm:text-base">{slot.label}</p>
-                                <p className="text-xs text-muted-foreground">{slot.time}</p>
-                                {slot.value === "evening" && (
-                                  <p className="text-xs text-emergency font-medium mt-1">+25%</p>
-                                )}
-                              </motion.button>
-                            ))}
-                          </div>
-                        </div>
-                      </>
-                    )}
-
-                    {/* Emergency notice */}
-                    {bookingType === "emergency" && (
-                      <motion.div 
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="p-4 rounded-xl bg-emergency-light border-2 border-emergency/30"
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="p-2 rounded-lg bg-emergency/20">
-                            <Clock className="h-5 w-5 text-emergency" />
-                          </div>
-                          <div>
-                            <p className="font-bold text-foreground">
-                              ASAP – Binnen 30 minuten
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              Een monteur wordt direct naar je toe gestuurd
-                            </p>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
+                    <div className="space-y-3">
+                      <Label className="text-base font-semibold">Tijdslot kiezen</Label>
+                      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                        {timeSlots.map((slot) => (
+                          <motion.button
+                            key={slot.value}
+                            type="button"
+                            onClick={() => setTimeSlot(slot.value)}
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            className={cn(
+                              "p-3 sm:p-4 rounded-xl border-2 text-center transition-all",
+                              timeSlot === slot.value
+                                ? "border-primary bg-primary/5 shadow-sm"
+                                : "border-border hover:border-primary/50"
+                            )}
+                          >
+                            <div className="text-xl mb-1">{slot.icon}</div>
+                            <p className="font-medium text-sm sm:text-base">{slot.label}</p>
+                            <p className="text-xs text-muted-foreground">{slot.time}</p>
+                            {slot.value === "evening" && (
+                              <p className="text-xs text-emergency font-medium mt-1">+25%</p>
+                            )}
+                          </motion.button>
+                        ))}
+                      </div>
+                    </div>
 
                     {/* Live Price Breakdown */}
                     {priceBreakdown && (
@@ -907,7 +890,7 @@ export default function Book() {
                       >
                         <PriceBreakdownCard
                           breakdown={priceBreakdown}
-                          bookingType={bookingType!}
+                          bookingType="planned"
                           compact
                         />
                       </motion.div>
@@ -925,11 +908,8 @@ export default function Book() {
                     </Button>
                     <Button 
                       onClick={() => setStep(3)}
-                      disabled={!selectedService || (bookingType === "planned" && (!date || !timeSlot))}
-                      className={cn(
-                        "flex-1 h-12 rounded-xl font-semibold",
-                        bookingType === "emergency" && "bg-emergency hover:bg-emergency/90"
-                      )}
+                      disabled={!selectedService || !date || !timeSlot}
+                      className="flex-1 h-12 rounded-xl font-semibold"
                     >
                       Volgende
                       <ArrowRight className="ml-2 h-4 w-4" />
@@ -939,7 +919,7 @@ export default function Book() {
               )}
 
               {/* Step 3: Guest Details & Confirm */}
-              {step === 3 && selectedServiceData && priceBreakdown && (
+              {step === 3 && priceBreakdown && (bookingType === "emergency" ? selectedEmergencyService : selectedServiceData) && (
                 <motion.div
                   key="step3"
                   variants={fadeInUp}
@@ -961,16 +941,20 @@ export default function Book() {
                     {/* Form */}
                     <div className="lg:col-span-2">
                       <GuestBookingForm
-                        serviceId={selectedService!}
-                        serviceName={selectedServiceData.name_nl}
+                        serviceId={bookingType === "emergency" ? selectedEmergencyService! : selectedService!}
+                        serviceName={bookingType === "emergency" 
+                          ? selectedEmergencyServiceData?.label || "Spoed storing" 
+                          : selectedServiceData?.name_nl || ""}
                         bookingType={bookingType!}
                         scheduledDate={date ? format(date, "yyyy-MM-dd") : null}
                         timeSlot={timeSlot}
-                        basePrice={Number(selectedServiceData.base_price)}
+                        basePrice={bookingType === "emergency" ? EMERGENCY_HOURLY_RATE : Number(selectedServiceData?.base_price || 0)}
                         finalPrice={priceBreakdown.total}
                         priceBreakdown={priceBreakdown}
                         onSuccess={handleBookingSuccess}
-                        onBack={() => setStep(2)}
+                        onBack={() => setStep(bookingType === "emergency" ? 1 : 2)}
+                        emergencyDescription={emergencyDescription}
+                        emergencyPhotos={emergencyPhotos}
                       />
                     </div>
 
@@ -990,8 +974,12 @@ export default function Book() {
                             </span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Dienst</span>
-                            <span className="font-medium text-right">{selectedServiceData.name_nl}</span>
+                            <span className="text-muted-foreground">Storing</span>
+                            <span className="font-medium text-right">
+                              {bookingType === "emergency" 
+                                ? selectedEmergencyServiceData?.label || "Spoed storing"
+                                : selectedServiceData?.name_nl || ""}
+                            </span>
                           </div>
                           {bookingType === "planned" && date && (
                             <div className="flex justify-between">

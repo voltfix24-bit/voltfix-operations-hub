@@ -29,6 +29,8 @@ interface GuestBookingFormProps {
   priceBreakdown: PriceBreakdown;
   onSuccess: (payload: BookingSuccessPayload) => void;
   onBack: () => void;
+  emergencyDescription?: string;
+  emergencyPhotos?: File[];
 }
 
 export function GuestBookingForm({
@@ -42,6 +44,8 @@ export function GuestBookingForm({
   priceBreakdown,
   onSuccess,
   onBack,
+  emergencyDescription = "",
+  emergencyPhotos = [],
 }: GuestBookingFormProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -49,9 +53,9 @@ export function GuestBookingForm({
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
   const [postalCode, setPostalCode] = useState("");
-  const [description, setDescription] = useState("");
-  const [photos, setPhotos] = useState<File[]>([]);
-  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  const [description, setDescription] = useState(emergencyDescription);
+  const [photos, setPhotos] = useState<File[]>(emergencyPhotos);
+  const [photoUrls, setPhotoUrls] = useState<string[]>(emergencyPhotos.map(f => URL.createObjectURL(f)));
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
