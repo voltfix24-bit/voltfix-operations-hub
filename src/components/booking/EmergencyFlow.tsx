@@ -21,7 +21,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { GuestBookingForm } from "./GuestBookingForm";
-import { type PriceBreakdown, type PriceLine } from "./PriceBreakdownCard";
+import { PriceBreakdownCard } from "./PriceBreakdownCard";
+import { usePricing, PRICING, formatPrice, getTimeSurchargeInfo } from "@/hooks/usePricing";
 
 // Emergency service options
 const EMERGENCY_SERVICES: { id: string; label: string; icon: LucideIcon; warning?: string }[] = [
@@ -31,27 +32,6 @@ const EMERGENCY_SERVICES: { id: string; label: string; icon: LucideIcon; warning
   { id: "water-meterkast", label: "Water in meterkast", icon: Droplets },
   { id: "anders", label: "Anders / niet zeker", icon: HelpCircle },
 ];
-
-const EMERGENCY_HOURLY_RATE = 120; // €120 ex BTW per eerste uur
-const VAT_RATE = 0.21;
-
-// Build emergency price breakdown
-function buildEmergencyPriceBreakdown(): PriceBreakdown {
-  const lines: PriceLine[] = [];
-  const basePrice = EMERGENCY_HOURLY_RATE;
-  
-  lines.push({
-    label: "Eerste uur (incl. voorrijkosten)",
-    amount: basePrice,
-    hint: "Diagnose + reparatie",
-  });
-
-  const subtotal = basePrice;
-  const vat = Math.round(subtotal * VAT_RATE * 100) / 100;
-  const total = Math.round((subtotal + vat) * 100) / 100;
-
-  return { lines, subtotal, vat, total };
-}
 
 interface EmergencyFlowProps {
   onBack: () => void;
@@ -77,8 +57,23 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
   const [description, setDescription] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
 
+  // Determine current date/time for surcharge calculation
+  const now = new Date();
+  const currentHour = now.getHours();
+  
+  // Calculate time-based surcharges
+  const isEvening = currentHour >= PRICING.eveningStart && currentHour < PRICING.eveningEnd;
+  const isWeekend = now.getDay() === 0 || now.getDay() === 6;
+  const timeSurchargeInfo = getTimeSurchargeInfo(now, isEvening ? "evening" : "morning");
+
+  // Use centralized pricing hook
+  const priceBreakdown = usePricing({
+    bookingType: "emergency",
+    date: now,
+    timeSlot: isEvening ? "evening" : "morning",
+  });
+
   const selectedServiceData = EMERGENCY_SERVICES.find(s => s.id === selectedService);
-  const priceBreakdown = buildEmergencyPriceBreakdown();
 
   const handleServiceSelect = (serviceId: string) => {
     setSelectedService(serviceId);
@@ -299,23 +294,21 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
               </h2>
             </div>
 
-            {/* Price Badge */}
+            {/* Full Price Breakdown Card */}
+            <PriceBreakdownCard
+              breakdown={priceBreakdown}
+              bookingType="emergency"
+            />
+
+            {/* Additional info */}
             <div className="p-4 rounded-2xl bg-muted/50 border border-border space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-foreground">💶 Eerste uur</span>
-                <span className="font-bold text-emergency text-xl">
-                  €{EMERGENCY_HOURLY_RATE}
-                  <span className="text-sm font-normal text-muted-foreground ml-1">excl. btw</span>
-                </span>
-              </div>
-              
               <div className="text-sm text-muted-foreground space-y-2">
                 <p>
                   <strong className="text-foreground">90% van de storingen</strong> wordt binnen het eerste uur opgelost.
                 </p>
                 <div className="flex items-start gap-2">
                   <CheckCircle className="h-4 w-4 text-success shrink-0 mt-0.5" />
-                  <span>Voorrijkosten inbegrepen</span>
+                  <span>Gecertificeerd (NEN 3140)</span>
                 </div>
                 <div className="flex items-start gap-2">
                   <CheckCircle className="h-4 w-4 text-success shrink-0 mt-0.5" />
@@ -327,12 +320,15 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-border">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Totaal incl. BTW:</span>
-                  <span className="font-bold text-lg text-foreground">€{priceBreakdown.total.toFixed(2)}</span>
+              {/* Active surcharges indicator */}
+              {(isEvening || isWeekend) && (
+                <div className="pt-2 border-t border-border">
+                  <p className="text-xs text-muted-foreground">
+                    {isWeekend && "Weekendtarief actief"}
+                    {isEvening && !isWeekend && "Avondtarief actief"}
+                  </p>
                 </div>
-              </div>
+              )}
             </div>
 
             <div className="flex gap-3 pt-2">
@@ -378,7 +374,7 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
               serviceId={selectedService || "spoed"}
               serviceName={selectedServiceData?.label || "Spoedstoring"}
               bookingType="emergency"
-              basePrice={EMERGENCY_HOURLY_RATE}
+              basePrice={PRICING.baseRate}
               finalPrice={priceBreakdown.total}
               priceBreakdown={priceBreakdown}
               onSuccess={onSuccess}
@@ -408,7 +404,7 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
               </div>
               <div className="pt-2 border-t border-border flex items-center justify-between">
                 <span className="text-muted-foreground">Totaal (incl. btw):</span>
-                <span className="font-bold text-lg text-emergency">€{priceBreakdown.total.toFixed(2)}</span>
+                <span className="font-bold text-lg text-emergency">{formatPrice(priceBreakdown.total)}</span>
               </div>
               <p className="text-xs text-muted-foreground text-center">
                 Betaling pas na uitvoering
