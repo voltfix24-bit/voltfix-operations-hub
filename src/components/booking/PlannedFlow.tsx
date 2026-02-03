@@ -18,7 +18,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { GuestBookingForm } from "./GuestBookingForm";
-import { PriceBreakdownCard, type PriceBreakdown, type PriceLine } from "./PriceBreakdownCard";
+import { PriceBreakdownCard } from "./PriceBreakdownCard";
+import { usePricing, PRICING, formatPrice, getTimeSurchargeInfo } from "@/hooks/usePricing";
 
 type TimeSlot = "morning" | "afternoon" | "evening";
 
@@ -31,7 +32,7 @@ interface ServiceType {
   is_emergency_eligible: boolean;
 }
 
-// Planned services with Dutch names
+// Planned services with Dutch names (fallback)
 const PLANNED_SERVICES = [
   { id: "groepenkast", label: "Groepenkast", description: "Uitbreiding, vervanging of keuring" },
   { id: "kookgroep", label: "Kookgroep / Perilex", description: "Installatie of vervanging" },
@@ -42,75 +43,9 @@ const PLANNED_SERVICES = [
 
 const TIME_SLOTS = [
   { value: "morning" as TimeSlot, label: "Ochtend", time: "08:00 - 12:00", icon: "☀️" },
-  { value: "afternoon" as TimeSlot, label: "Middag", time: "12:00 - 17:00", icon: "🌤️" },
-  { value: "evening" as TimeSlot, label: "Avond", time: "17:00 - 21:00", icon: "🌙", surcharge: "+25%" },
+  { value: "afternoon" as TimeSlot, label: "Middag", time: "12:00 - 18:00", icon: "🌤️" },
+  { value: "evening" as TimeSlot, label: "Avond", time: "18:00 - 22:00", icon: "🌙", surcharge: "+25%" },
 ];
-
-const PRICING = {
-  basePrice: 125, // €125 base
-  vatRate: 0.21,
-  plannedDiscountPct: 0.10,
-  eveningSurchargePct: 0.25,
-  weekendSurchargePct: 0.15,
-};
-
-function buildPlannedPriceBreakdown({
-  basePrice,
-  timeSlot,
-  date,
-}: {
-  basePrice: number;
-  timeSlot: TimeSlot | null;
-  date: Date | undefined;
-}): PriceBreakdown {
-  const lines: PriceLine[] = [];
-  let runningTotal = basePrice;
-
-  lines.push({
-    label: "Basistarief",
-    amount: basePrice,
-  });
-
-  // Planned discount
-  const discount = -(basePrice * PRICING.plannedDiscountPct);
-  lines.push({
-    label: "Korting gepland (-10%)",
-    amount: discount,
-    hint: "Bespaar door vooruit te plannen",
-  });
-  runningTotal += discount;
-
-  // Weekend surcharge
-  if (date) {
-    const dayOfWeek = date.getDay();
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
-      const weekendSurcharge = runningTotal * PRICING.weekendSurchargePct;
-      lines.push({
-        label: "Weekendtoeslag (+15%)",
-        amount: weekendSurcharge,
-        hint: "Werkzaamheden in het weekend",
-      });
-      runningTotal += weekendSurcharge;
-    }
-  }
-
-  // Evening surcharge
-  if (timeSlot === "evening") {
-    const eveningSurcharge = runningTotal * PRICING.eveningSurchargePct;
-    lines.push({
-      label: "Avondtoeslag (+25%)",
-      amount: eveningSurcharge,
-      hint: "Werkzaamheden na 17:00",
-    });
-    runningTotal += eveningSurcharge;
-  }
-
-  const subtotal = Math.round(runningTotal * 100) / 100;
-  const vat = Math.round(subtotal * PRICING.vatRate * 100) / 100;
-  const total = Math.round((subtotal + vat) * 100) / 100;
-
-  return { lines, subtotal, vat, total };
-}
 
 interface PlannedFlowProps {
   onBack: () => void;
@@ -157,10 +92,16 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
   };
 
   const selectedServiceData = services.find(s => s.id === selectedService);
-  const basePrice = selectedServiceData?.base_price || PRICING.basePrice;
-  const priceBreakdown = buildPlannedPriceBreakdown({ basePrice, timeSlot, date });
 
-  // Check if date is weekend
+  // Use centralized pricing hook
+  const priceBreakdown = usePricing({
+    bookingType: "planned",
+    date,
+    timeSlot,
+  });
+
+  // Get time surcharge info for UI display
+  const timeSurchargeInfo = getTimeSurchargeInfo(date, timeSlot);
   const isWeekend = date ? (date.getDay() === 0 || date.getDay() === 6) : false;
 
   return (
@@ -192,7 +133,7 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
                   id: s.id, 
                   name_nl: s.label, 
                   description: s.description,
-                  base_price: PRICING.basePrice,
+                  base_price: PRICING.baseRate,
                 } as ServiceType))).map((service) => (
                   <motion.label
                     key={service.id}
@@ -217,7 +158,7 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
                       </div>
                     </div>
                     <span className="font-bold text-primary shrink-0 ml-2">
-                      €{Number(service.base_price).toFixed(0)}
+                      vanaf €{PRICING.baseRate}
                     </span>
                   </motion.label>
                 ))}
@@ -296,7 +237,7 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
               {isWeekend && (
                 <p className="text-xs text-emergency flex items-center gap-1">
                   <Info className="h-3 w-3" />
-                  Weekendtoeslag van 15% is van toepassing
+                  Weekendtoeslag van 35% is van toepassing
                 </p>
               )}
             </div>
@@ -305,29 +246,43 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
             <div className="space-y-3">
               <Label className="text-base font-semibold">Tijdslot</Label>
               <div className="grid grid-cols-3 gap-3">
-                {TIME_SLOTS.map((slot) => (
-                  <motion.button
-                    key={slot.value}
-                    type="button"
-                    onClick={() => setTimeSlot(slot.value)}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className={cn(
-                      "p-4 rounded-xl border-2 text-center transition-all min-h-[100px] flex flex-col items-center justify-center",
-                      timeSlot === slot.value
-                        ? "border-primary bg-primary/5 shadow-sm"
-                        : "border-border hover:border-primary/50"
-                    )}
-                  >
-                    <div className="text-2xl mb-1">{slot.icon}</div>
-                    <p className="font-medium text-sm">{slot.label}</p>
-                    <p className="text-xs text-muted-foreground">{slot.time}</p>
-                    {slot.surcharge && (
-                      <p className="text-xs text-emergency font-medium mt-1">{slot.surcharge}</p>
-                    )}
-                  </motion.button>
-                ))}
+                {TIME_SLOTS.map((slot) => {
+                  // Show surcharge info - but only if not weekend (weekend trumps evening)
+                  const showEveningSurcharge = slot.value === "evening" && !isWeekend;
+                  
+                  return (
+                    <motion.button
+                      key={slot.value}
+                      type="button"
+                      onClick={() => setTimeSlot(slot.value)}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={cn(
+                        "p-4 rounded-xl border-2 text-center transition-all min-h-[100px] flex flex-col items-center justify-center",
+                        timeSlot === slot.value
+                          ? "border-primary bg-primary/5 shadow-sm"
+                          : "border-border hover:border-primary/50"
+                      )}
+                    >
+                      <div className="text-2xl mb-1">{slot.icon}</div>
+                      <p className="font-medium text-sm">{slot.label}</p>
+                      <p className="text-xs text-muted-foreground">{slot.time}</p>
+                      {showEveningSurcharge && (
+                        <p className="text-xs text-emergency font-medium mt-1">+25%</p>
+                      )}
+                    </motion.button>
+                  );
+                })}
               </div>
+              
+              {/* Surcharge explanation */}
+              {timeSurchargeInfo.applicableSurcharge && (
+                <p className="text-xs text-muted-foreground">
+                  {timeSurchargeInfo.applicableSurcharge === "weekend" 
+                    ? "Weekendtarief actief (+35%). Avondtoeslag is niet van toepassing bij weekendtarief."
+                    : "Avondtarief actief (+25%)"}
+                </p>
+              )}
             </div>
 
             {/* Live Price Preview */}
@@ -340,11 +295,11 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium text-foreground">Geschatte prijs</span>
                   <span className="font-bold text-xl text-primary">
-                    €{priceBreakdown.total.toFixed(2)}
+                    {formatPrice(priceBreakdown.total)}
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Inclusief BTW • Definitieve prijs na selectie tijdslot
+                  Inclusief BTW • Definitieve prijs na selectie
                 </p>
               </motion.div>
             )}
@@ -399,7 +354,7 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-success" />
-                <span>Geen voorrijkosten achteraf</span>
+                <span>Voorrijkosten inbegrepen</span>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-success" />
@@ -452,7 +407,7 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
               bookingType="planned"
               scheduledDate={date ? format(date, "yyyy-MM-dd") : null}
               timeSlot={timeSlot}
-              basePrice={basePrice}
+              basePrice={PRICING.baseRate}
               finalPrice={priceBreakdown.total}
               priceBreakdown={priceBreakdown}
               onSuccess={onSuccess}
@@ -484,7 +439,11 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
               </div>
               <div className="pt-2 border-t border-border flex items-center justify-between">
                 <span className="text-muted-foreground">Totaal (incl. btw):</span>
-                <span className="font-bold text-lg text-primary">€{priceBreakdown.total.toFixed(2)}</span>
+                <span className="font-bold text-lg text-primary">{formatPrice(priceBreakdown.total)}</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Shield className="h-3 w-3" />
+                <span>Betaling pas na uitvoering</span>
               </div>
             </div>
           </motion.div>
