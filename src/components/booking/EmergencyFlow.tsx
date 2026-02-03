@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { format } from "date-fns";
+import { nl } from "date-fns/locale";
 import { 
   Phone, 
   ArrowRight, 
@@ -22,7 +24,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { GuestBookingForm } from "./GuestBookingForm";
 import { PriceBreakdownCard } from "./PriceBreakdownCard";
-import { usePricing, PRICING, formatPrice, getTimeSurchargeInfo } from "@/hooks/usePricing";
+import { TimeSlotCalendar } from "./TimeSlotCalendar";
+import { PRICING, formatPrice, buildPriceBreakdown } from "@/hooks/usePricing";
+import { TimeSlotDefinition, getTimeSlotCategory } from "@/types/booking";
 
 // Emergency service options
 const EMERGENCY_SERVICES: { id: string; label: string; icon: LucideIcon; warning?: string }[] = [
@@ -52,25 +56,19 @@ const fadeInUp = {
 };
 
 export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [description, setDescription] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
+  const [date, setDate] = useState<Date | undefined>(undefined);
+  const [selectedSlot, setSelectedSlot] = useState<TimeSlotDefinition | null>(null);
+  const [slotPriceInclVat, setSlotPriceInclVat] = useState<number>(0);
 
-  // Determine current date/time for surcharge calculation
-  const now = new Date();
-  const currentHour = now.getHours();
-  
-  // Calculate time-based surcharges
-  const isEvening = currentHour >= PRICING.eveningStart && currentHour < PRICING.eveningEnd;
-  const isWeekend = now.getDay() === 0 || now.getDay() === 6;
-  const timeSurchargeInfo = getTimeSurchargeInfo(now, isEvening ? "evening" : "morning");
-
-  // Use centralized pricing hook
-  const priceBreakdown = usePricing({
+  // Build price breakdown based on selected slot or current time
+  const priceBreakdown = buildPriceBreakdown({
     bookingType: "emergency",
-    date: now,
-    timeSlot: isEvening ? "evening" : "morning",
+    date: date || new Date(),
+    timeSlot: selectedSlot ? getTimeSlotCategory(selectedSlot) : null,
   });
 
   const selectedServiceData = EMERGENCY_SERVICES.find(s => s.id === selectedService);
@@ -81,18 +79,30 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
     setTimeout(() => setStep(2), 300);
   };
 
+  const handleSlotChange = (slot: TimeSlotDefinition, priceInclVat: number) => {
+    setSelectedSlot(slot);
+    setSlotPriceInclVat(priceInclVat);
+  };
+
+  const getTimeSlotLabel = () => {
+    if (!selectedSlot) return "-";
+    return `${selectedSlot.startTime} – ${selectedSlot.endTime}`;
+  };
+
   return (
     <div className="space-y-4">
-      {/* Persistent Phone CTA */}
-      <motion.a
-        href="tel:+31201234567"
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-center gap-2 p-3 rounded-xl bg-emergency text-emergency-foreground font-bold text-base shadow-md"
-      >
-        <Phone className="h-5 w-5" />
-        <span>Bel direct: 020 – 123 4567</span>
-      </motion.a>
+      {/* Persistent Phone CTA - Only show when NOT on calendar step */}
+      {step !== 3 && (
+        <motion.a
+          href="tel:+31201234567"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center justify-center gap-2 p-3 rounded-xl bg-emergency text-emergency-foreground font-bold text-base shadow-md"
+        >
+          <Phone className="h-5 w-5" />
+          <span>Bel direct: 020 – 123 4567</span>
+        </motion.a>
+      )}
 
       <AnimatePresence mode="wait">
         {/* STEP 1: Situation Selection */}
@@ -278,10 +288,34 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
           </motion.div>
         )}
 
-        {/* STEP 3: Price Info */}
+        {/* STEP 3: Time Slot Calendar */}
         {step === 3 && (
           <motion.div
             key="step3"
+            variants={fadeInUp}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+          >
+            <TimeSlotCalendar
+              flowType="emergency"
+              selectedDate={date}
+              selectedSlot={selectedSlot}
+              onDateChange={(newDate) => {
+                setDate(newDate);
+                setSelectedSlot(null); // Reset slot when date changes
+              }}
+              onSlotChange={handleSlotChange}
+              onContinue={() => setStep(4)}
+              onBack={() => setStep(2)}
+            />
+          </motion.div>
+        )}
+
+        {/* STEP 4: Price Info */}
+        {step === 4 && (
+          <motion.div
+            key="step4"
             variants={fadeInUp}
             initial="initial"
             animate="animate"
@@ -319,29 +353,19 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
                   <span>Vooraf akkoord bij extra kosten</span>
                 </div>
               </div>
-
-              {/* Active surcharges indicator */}
-              {(isEvening || isWeekend) && (
-                <div className="pt-2 border-t border-border">
-                  <p className="text-xs text-muted-foreground">
-                    {isWeekend && "Weekendtarief actief"}
-                    {isEvening && !isWeekend && "Avondtarief actief"}
-                  </p>
-                </div>
-              )}
             </div>
 
             <div className="flex gap-3 pt-2">
               <Button
                 variant="outline"
-                onClick={() => setStep(2)}
+                onClick={() => setStep(3)}
                 className="flex-1 h-12 rounded-xl"
               >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Terug
               </Button>
               <Button
-                onClick={() => setStep(4)}
+                onClick={() => setStep(5)}
                 className="flex-1 h-12 rounded-xl bg-emergency hover:bg-emergency/90 font-semibold"
               >
                 Volgende stap
@@ -351,10 +375,10 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
           </motion.div>
         )}
 
-        {/* STEP 4: Contact Details */}
-        {step === 4 && (
+        {/* STEP 5: Contact Details */}
+        {step === 5 && (
           <motion.div
-            key="step4"
+            key="step5"
             variants={fadeInUp}
             initial="initial"
             animate="animate"
@@ -374,16 +398,18 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
               serviceId={selectedService || "spoed"}
               serviceName={selectedServiceData?.label || "Spoedstoring"}
               bookingType="emergency"
+              scheduledDate={date ? format(date, "yyyy-MM-dd") : null}
+              timeSlot={selectedSlot ? getTimeSlotCategory(selectedSlot) : null}
               basePrice={PRICING.baseRate}
               finalPrice={priceBreakdown.total}
               priceBreakdown={priceBreakdown}
               onSuccess={onSuccess}
-              onBack={() => setStep(3)}
+              onBack={() => setStep(4)}
               emergencyDescription={description}
               emergencyPhotos={photos}
             />
 
-            {/* Summary Panel - Desktop sidebar style on mobile */}
+            {/* Summary Panel */}
             <div className="p-4 rounded-2xl bg-card border border-border space-y-3">
               <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
                 Samenvatting
@@ -401,6 +427,14 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
                   <Shield className="h-4 w-4 text-success" />
                   <span>Gecertificeerd (NEN 3140)</span>
                 </div>
+                {date && selectedSlot && (
+                  <div className="flex justify-between pt-1 border-t border-border">
+                    <span className="text-muted-foreground">Gekozen tijdslot</span>
+                    <span className="font-medium">
+                      {format(date, "d MMM", { locale: nl })} • {getTimeSlotLabel()}
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="pt-2 border-t border-border flex items-center justify-between">
                 <span className="text-muted-foreground">Totaal (incl. btw):</span>
