@@ -1,13 +1,14 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import { Camera, X, Loader2, CheckCircle, AlertCircle, User, Phone, Mail, MapPin, FileText } from "lucide-react";
+import { Camera, X, Loader2, CheckCircle, AlertCircle, User, Phone, Mail, MapPin, FileText, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type PriceBreakdown } from "./PriceBreakdownCard";
+import { useAddressLookup } from "@/hooks/useAddressLookup";
 
 interface BookingSuccessPayload {
   jobId: string;
@@ -50,9 +51,11 @@ export function GuestBookingForm({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
-  const [city, setCity] = useState("");
   const [postalCode, setPostalCode] = useState("");
+  const [houseNumber, setHouseNumber] = useState("");
+  const [houseNumberAddition, setHouseNumberAddition] = useState("");
+  const [street, setStreet] = useState("");
+  const [city, setCity] = useState("");
   const [description, setDescription] = useState(emergencyDescription);
   const [photos, setPhotos] = useState<File[]>(emergencyPhotos);
   const [photoUrls, setPhotoUrls] = useState<string[]>(emergencyPhotos.map(f => URL.createObjectURL(f)));
@@ -61,6 +64,28 @@ export function GuestBookingForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-lookup address based on postal code and house number
+  const { 
+    street: lookupStreet, 
+    city: lookupCity, 
+    loading: addressLoading, 
+    found: addressFound,
+    error: addressError 
+  } = useAddressLookup(postalCode, houseNumber);
+
+  // Update street and city when lookup succeeds
+  useEffect(() => {
+    if (addressFound && lookupStreet) {
+      setStreet(lookupStreet);
+      setCity(lookupCity);
+    }
+  }, [addressFound, lookupStreet, lookupCity]);
+
+  // Compute full address for submission
+  const fullAddress = street 
+    ? `${street} ${houseNumber}${houseNumberAddition ? ` ${houseNumberAddition}` : ""}`
+    : "";
 
   const validateField = (field: string, value: string) => {
     switch (field) {
@@ -74,8 +99,12 @@ export function GuestBookingForm({
       case "email":
         if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "Ongeldig e-mailadres";
         break;
-      case "address":
-        if (!value.trim()) return "Adres is verplicht";
+      case "postalCode":
+        if (!value.trim()) return "Postcode is verplicht";
+        if (!/^[1-9][0-9]{3}\s?[A-Za-z]{2}$/.test(value.replace(/\s/g, ""))) return "Ongeldige postcode";
+        break;
+      case "houseNumber":
+        if (!value.trim()) return "Huisnummer is verplicht";
         break;
     }
     return "";
@@ -93,7 +122,13 @@ export function GuestBookingForm({
     newErrors.name = validateField("name", name);
     newErrors.phone = validateField("phone", phone);
     newErrors.email = validateField("email", email);
-    newErrors.address = validateField("address", address);
+    newErrors.postalCode = validateField("postalCode", postalCode);
+    newErrors.houseNumber = validateField("houseNumber", houseNumber);
+    
+    // Check if address was found
+    if (!fullAddress) {
+      newErrors.address = "Voer een geldige postcode en huisnummer in";
+    }
     
     // Filter out empty errors
     const filteredErrors = Object.fromEntries(
@@ -101,7 +136,7 @@ export function GuestBookingForm({
     );
     
     setErrors(filteredErrors);
-    setTouched({ name: true, phone: true, email: true, address: true });
+    setTouched({ name: true, phone: true, email: true, postalCode: true, houseNumber: true });
     return Object.keys(filteredErrors).length === 0;
   };
 
@@ -182,7 +217,7 @@ export function GuestBookingForm({
         status: "requested" as const,
         scheduled_date: scheduledDate || null,
         scheduled_time_slot: timeSlotEnum,
-        address,
+        address: fullAddress,
         city: city || null,
         postal_code: postalCode || null,
         description: description || null,
@@ -202,7 +237,7 @@ export function GuestBookingForm({
         jobId: data.id,
         guestName: name,
         guestPhone: phone,
-        address: address,
+        address: fullAddress,
         city: city || undefined,
         postalCode: postalCode || undefined,
       });
@@ -218,10 +253,20 @@ export function GuestBookingForm({
     "focus:ring-2 focus:ring-primary/20 focus:border-primary",
     touched[field] && errors[field] 
       ? "border-destructive bg-destructive/5" 
-      : touched[field] && !errors[field] && (field === "name" || field === "phone" || field === "address" ? (field === "name" ? name : field === "phone" ? phone : address) : true)
+      : touched[field] && !errors[field] && getFieldValue(field)
         ? "border-success/50 bg-success/5"
         : "border-border"
   );
+
+  const getFieldValue = (field: string): string => {
+    switch (field) {
+      case "name": return name;
+      case "phone": return phone;
+      case "postalCode": return postalCode;
+      case "houseNumber": return houseNumber;
+      default: return "";
+    }
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -370,21 +415,99 @@ export function GuestBookingForm({
           <h3 className="font-display font-semibold text-lg">Adres</h3>
         </div>
         
+        {/* Postal Code + House Number Row */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="postalCode" className="flex items-center gap-1">
+              Postcode <span className="text-destructive">*</span>
+            </Label>
+            <div className="relative">
+              <Input
+                id="postalCode"
+                value={postalCode}
+                onChange={(e) => setPostalCode(e.target.value.toUpperCase())}
+                onBlur={() => handleBlur("postalCode", postalCode)}
+                placeholder="1234 AB"
+                className={inputClasses("postalCode")}
+                maxLength={7}
+              />
+            </div>
+            <AnimatePresence>
+              {touched.postalCode && errors.postalCode && (
+                <motion.p
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="text-sm text-destructive flex items-center gap-1"
+                >
+                  <AlertCircle className="h-3 w-3" />
+                  {errors.postalCode}
+                </motion.p>
+              )}
+            </AnimatePresence>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="houseNumber" className="flex items-center gap-1">
+              Huisnr. <span className="text-destructive">*</span>
+            </Label>
+            <div className="relative">
+              <Input
+                id="houseNumber"
+                value={houseNumber}
+                onChange={(e) => setHouseNumber(e.target.value)}
+                onBlur={() => handleBlur("houseNumber", houseNumber)}
+                placeholder="123"
+                className={inputClasses("houseNumber")}
+              />
+            </div>
+            <AnimatePresence>
+              {touched.houseNumber && errors.houseNumber && (
+                <motion.p
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="text-sm text-destructive flex items-center gap-1"
+                >
+                  <AlertCircle className="h-3 w-3" />
+                  {errors.houseNumber}
+                </motion.p>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="houseNumberAddition">Toev.</Label>
+            <Input
+              id="houseNumberAddition"
+              value={houseNumberAddition}
+              onChange={(e) => setHouseNumberAddition(e.target.value)}
+              placeholder="A, bis"
+              className="h-12 rounded-xl border-2"
+            />
+          </div>
+        </div>
+
+        {/* Auto-filled Street and City */}
         <div className="space-y-2">
-          <Label htmlFor="address" className="flex items-center gap-1">
-            Straat en huisnummer <span className="text-destructive">*</span>
+          <Label className="flex items-center gap-2">
+            Straat en plaats
+            {addressLoading && (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            )}
           </Label>
           <div className="relative">
             <Input
-              id="address"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              onBlur={() => handleBlur("address", address)}
-              placeholder="Hoofdstraat 123"
-              className={inputClasses("address")}
+              value={addressFound ? `${street}, ${city}` : ""}
+              readOnly
+              placeholder="Wordt automatisch ingevuld..."
+              className={cn(
+                "h-12 rounded-xl border-2 bg-muted/50",
+                addressFound && "border-success/50 bg-success/5"
+              )}
             />
             <AnimatePresence>
-              {touched.address && !errors.address && address && (
+              {addressFound && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.5 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -397,42 +520,18 @@ export function GuestBookingForm({
             </AnimatePresence>
           </div>
           <AnimatePresence>
-            {touched.address && errors.address && (
+            {addressError && postalCode && houseNumber && !addressLoading && (
               <motion.p
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
-                className="text-sm text-destructive flex items-center gap-1"
+                className="text-sm text-muted-foreground flex items-center gap-1"
               >
                 <AlertCircle className="h-3 w-3" />
-                {errors.address}
+                {addressError} - controleer postcode en huisnummer
               </motion.p>
             )}
           </AnimatePresence>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <Label htmlFor="postalCode">Postcode</Label>
-            <Input
-              id="postalCode"
-              value={postalCode}
-              onChange={(e) => setPostalCode(e.target.value.toUpperCase())}
-              placeholder="1234 AB"
-              className="h-12 rounded-xl border-2"
-              maxLength={7}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="city">Plaats</Label>
-            <Input
-              id="city"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              placeholder="Amsterdam"
-              className="h-12 rounded-xl border-2"
-            />
-          </div>
         </div>
       </motion.div>
 
