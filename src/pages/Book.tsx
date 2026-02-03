@@ -210,9 +210,9 @@ export default function Book() {
     setLoading(false);
   };
 
-  const filteredServices = services.filter(s => 
-    bookingType === "emergency" ? s.is_emergency_eligible : true
-  );
+  // For planned bookings, show only non-emergency services
+  // For emergency bookings, the EMERGENCY_SERVICES array is used instead (not filteredServices)
+  const filteredServices = services.filter(s => !s.is_emergency_eligible);
 
   const selectedServiceData = services.find(s => s.id === selectedService);
   
