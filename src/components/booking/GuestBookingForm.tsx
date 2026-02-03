@@ -489,50 +489,63 @@ export function GuestBookingForm({
         </div>
 
         {/* Auto-filled Street and City */}
-        <div className="space-y-2">
-          <Label className="flex items-center gap-2">
-            Straat en plaats
-            {addressLoading && (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            )}
-          </Label>
-          <div className="relative">
+        {/* Street - Auto-filled but editable */}
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="street" className="flex items-center gap-2">
+              Straatnaam
+              {addressLoading && (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              )}
+              {addressFound && !addressLoading && (
+                <span className="text-xs text-success flex items-center gap-1">
+                  <CheckCircle className="h-3 w-3" />
+                  Gevonden
+                </span>
+              )}
+            </Label>
             <Input
-              value={addressFound ? `${street}, ${city}` : ""}
-              readOnly
+              id="street"
+              value={street}
+              onChange={(e) => setStreet(e.target.value)}
               placeholder="Wordt automatisch ingevuld..."
               className={cn(
-                "h-12 rounded-xl border-2 bg-muted/50",
-                addressFound && "border-success/50 bg-success/5"
+                "h-12 rounded-xl border-2 transition-all",
+                addressFound && street ? "border-success/50" : "border-border"
               )}
             />
-            <AnimatePresence>
-              {addressFound && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.5 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.5 }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2"
-                >
-                  <CheckCircle className="h-5 w-5 text-success" />
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
-          <AnimatePresence>
-            {addressError && postalCode && houseNumber && !addressLoading && (
-              <motion.p
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="text-sm text-muted-foreground flex items-center gap-1"
-              >
-                <AlertCircle className="h-3 w-3" />
-                {addressError} - controleer postcode en huisnummer
-              </motion.p>
-            )}
-          </AnimatePresence>
+
+          <div className="space-y-2">
+            <Label htmlFor="city" className="flex items-center gap-2">
+              Plaats
+            </Label>
+            <Input
+              id="city"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="Wordt automatisch ingevuld..."
+              className={cn(
+                "h-12 rounded-xl border-2 transition-all",
+                addressFound && city ? "border-success/50" : "border-border"
+              )}
+            />
+          </div>
         </div>
+        
+        <AnimatePresence>
+          {addressError && postalCode && houseNumber && !addressLoading && (
+            <motion.p
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="text-sm text-muted-foreground flex items-center gap-1"
+            >
+              <AlertCircle className="h-3 w-3" />
+              Adres niet gevonden - vul handmatig in
+            </motion.p>
+          )}
+        </AnimatePresence>
       </motion.div>
 
       {/* Description Section */}
