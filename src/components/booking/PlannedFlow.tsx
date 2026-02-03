@@ -5,23 +5,18 @@ import { nl } from "date-fns/locale";
 import { 
   ArrowRight, 
   ArrowLeft,
-  CalendarIcon,
   CheckCircle,
-  Info,
   Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { GuestBookingForm } from "./GuestBookingForm";
 import { PriceBreakdownCard } from "./PriceBreakdownCard";
-import { usePricing, PRICING, formatPrice, getTimeSurchargeInfo } from "@/hooks/usePricing";
-
-type TimeSlot = "morning" | "afternoon" | "evening";
+import { TimeSlotCalendar } from "./TimeSlotCalendar";
+import { PRICING, formatPrice, buildPriceBreakdown } from "@/hooks/usePricing";
+import { TimeSlotDefinition, getTimeSlotCategory } from "@/types/booking";
 
 interface ServiceType {
   id: string;
@@ -39,12 +34,6 @@ const PLANNED_SERVICES = [
   { id: "laadpaal", label: "Laadpaal", description: "Installatie laadpunt elektrisch voertuig" },
   { id: "nen-keuring", label: "NEN-keuring", description: "Elektrische veiligheidskeuring" },
   { id: "overig", label: "Overige werkzaamheden", description: "Andere elektrische werkzaamheden" },
-];
-
-const TIME_SLOTS = [
-  { value: "morning" as TimeSlot, label: "Ochtend", time: "08:00 - 12:00", icon: "☀️" },
-  { value: "afternoon" as TimeSlot, label: "Middag", time: "12:00 - 18:00", icon: "🌤️" },
-  { value: "evening" as TimeSlot, label: "Avond", time: "18:00 - 22:00", icon: "🌙", surcharge: "+25%" },
 ];
 
 interface PlannedFlowProps {
@@ -70,7 +59,8 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
   const [services, setServices] = useState<ServiceType[]>([]);
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [date, setDate] = useState<Date | undefined>(undefined);
-  const [timeSlot, setTimeSlot] = useState<TimeSlot | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<TimeSlotDefinition | null>(null);
+  const [slotPriceInclVat, setSlotPriceInclVat] = useState<number>(0);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -93,16 +83,23 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
 
   const selectedServiceData = services.find(s => s.id === selectedService);
 
-  // Use centralized pricing hook
-  const priceBreakdown = usePricing({
+  // Build price breakdown based on selected slot
+  const priceBreakdown = buildPriceBreakdown({
     bookingType: "planned",
     date,
-    timeSlot,
+    timeSlot: selectedSlot ? getTimeSlotCategory(selectedSlot) : null,
   });
 
-  // Get time surcharge info for UI display
-  const timeSurchargeInfo = getTimeSurchargeInfo(date, timeSlot);
-  const isWeekend = date ? (date.getDay() === 0 || date.getDay() === 6) : false;
+  // Get time slot label for summary
+  const getTimeSlotLabel = () => {
+    if (!selectedSlot) return "-";
+    return `${selectedSlot.startTime} – ${selectedSlot.endTime}`;
+  };
+
+  const handleSlotChange = (slot: TimeSlotDefinition, priceInclVat: number) => {
+    setSelectedSlot(slot);
+    setSlotPriceInclVat(priceInclVat);
+  };
 
   return (
     <div className="space-y-4">
@@ -186,7 +183,7 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
           </motion.div>
         )}
 
-        {/* STEP 2: Date & Time */}
+        {/* STEP 2: Date & Time Slot Calendar */}
         {step === 2 && (
           <motion.div
             key="step2"
@@ -194,134 +191,19 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
             initial="initial"
             animate="animate"
             exit="exit"
-            className="space-y-5"
           >
-            <div className="text-center space-y-1">
-              <h2 className="font-display text-xl font-bold">
-                Wanneer past het?
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Kies een datum en tijdslot
-              </p>
-            </div>
-
-            {/* Date Selection */}
-            <div className="space-y-3">
-              <Label className="text-base font-semibold">Datum</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal h-14 rounded-xl border-2 text-base",
-                      !date && "text-muted-foreground",
-                      date && "border-primary bg-primary/5"
-                    )}
-                  >
-                    <CalendarIcon className="mr-3 h-5 w-5" />
-                    {date ? format(date, "EEEE d MMMM yyyy", { locale: nl }) : "Selecteer een datum"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={date}
-                    onSelect={setDate}
-                    disabled={(d) => d < new Date()}
-                    initialFocus
-                    className="p-3 pointer-events-auto"
-                  />
-                </PopoverContent>
-              </Popover>
-              
-              {isWeekend && (
-                <p className="text-xs text-emergency flex items-center gap-1">
-                  <Info className="h-3 w-3" />
-                  Weekendtoeslag van 35% is van toepassing
-                </p>
-              )}
-            </div>
-
-            {/* Time Slot Selection */}
-            <div className="space-y-3">
-              <Label className="text-base font-semibold">Tijdslot</Label>
-              <div className="grid grid-cols-3 gap-3">
-                {TIME_SLOTS.map((slot) => {
-                  // Show surcharge info - but only if not weekend (weekend trumps evening)
-                  const showEveningSurcharge = slot.value === "evening" && !isWeekend;
-                  
-                  return (
-                    <motion.button
-                      key={slot.value}
-                      type="button"
-                      onClick={() => setTimeSlot(slot.value)}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className={cn(
-                        "p-4 rounded-xl border-2 text-center transition-all min-h-[100px] flex flex-col items-center justify-center",
-                        timeSlot === slot.value
-                          ? "border-primary bg-primary/5 shadow-sm"
-                          : "border-border hover:border-primary/50"
-                      )}
-                    >
-                      <div className="text-2xl mb-1">{slot.icon}</div>
-                      <p className="font-medium text-sm">{slot.label}</p>
-                      <p className="text-xs text-muted-foreground">{slot.time}</p>
-                      {showEveningSurcharge && (
-                        <p className="text-xs text-emergency font-medium mt-1">+25%</p>
-                      )}
-                    </motion.button>
-                  );
-                })}
-              </div>
-              
-              {/* Surcharge explanation */}
-              {timeSurchargeInfo.applicableSurcharge && (
-                <p className="text-xs text-muted-foreground">
-                  {timeSurchargeInfo.applicableSurcharge === "weekend" 
-                    ? "Weekendtarief actief (+35%). Avondtoeslag is niet van toepassing bij weekendtarief."
-                    : "Avondtarief actief (+25%)"}
-                </p>
-              )}
-            </div>
-
-            {/* Live Price Preview */}
-            {selectedService && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="p-4 rounded-2xl bg-muted/50 border border-border"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium text-foreground">Geschatte prijs</span>
-                  <span className="font-bold text-xl text-primary">
-                    {formatPrice(priceBreakdown.total)}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Inclusief BTW • Definitieve prijs na selectie
-                </p>
-              </motion.div>
-            )}
-
-            <div className="flex gap-3 pt-2">
-              <Button
-                variant="outline"
-                onClick={() => setStep(1)}
-                className="flex-1 h-12 rounded-xl"
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Terug
-              </Button>
-              <Button
-                onClick={() => setStep(3)}
-                disabled={!date || !timeSlot}
-                className="flex-1 h-12 rounded-xl font-semibold"
-              >
-                Volgende
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </div>
+            <TimeSlotCalendar
+              flowType="planned"
+              selectedDate={date}
+              selectedSlot={selectedSlot}
+              onDateChange={(newDate) => {
+                setDate(newDate);
+                setSelectedSlot(null); // Reset slot when date changes
+              }}
+              onSlotChange={handleSlotChange}
+              onContinue={() => setStep(3)}
+              onBack={() => setStep(1)}
+            />
           </motion.div>
         )}
 
@@ -406,7 +288,7 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
               serviceName={selectedServiceData?.name_nl || "Geplande werkzaamheden"}
               bookingType="planned"
               scheduledDate={date ? format(date, "yyyy-MM-dd") : null}
-              timeSlot={timeSlot}
+              timeSlot={selectedSlot ? getTimeSlotCategory(selectedSlot) : null}
               basePrice={PRICING.baseRate}
               finalPrice={priceBreakdown.total}
               priceBreakdown={priceBreakdown}
@@ -432,9 +314,7 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Tijd</span>
-                  <span className="font-medium">
-                    {TIME_SLOTS.find(t => t.value === timeSlot)?.label || "-"}
-                  </span>
+                  <span className="font-medium">{getTimeSlotLabel()}</span>
                 </div>
               </div>
               <div className="pt-2 border-t border-border flex items-center justify-between">
