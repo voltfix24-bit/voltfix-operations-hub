@@ -268,7 +268,7 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
               {/* Photo Upload */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium">
-                  Foto toevoegen (max 5)
+                  Foto toevoegen (optioneel, max {MAX_PHOTOS})
                 </Label>
                 <div className="flex flex-wrap gap-3">
                   {photos.map((photo, idx) => (
@@ -280,31 +280,42 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
                       />
                       <button
                         type="button"
-                        onClick={() => setPhotos(prev => prev.filter((_, i) => i !== idx))}
+                        onClick={() => {
+                          setPhotos(prev => prev.filter((_, i) => i !== idx));
+                          setPhotoError(null);
+                        }}
                         className="absolute -top-2 -right-2 p-1 rounded-full bg-destructive text-destructive-foreground shadow-md"
+                        aria-label="Foto verwijderen"
                       >
                         <X className="h-3 w-3" />
                       </button>
                     </div>
                   ))}
-                  {photos.length < 5 && (
+                  {photos.length < MAX_PHOTOS && (
                     <label className="w-16 h-16 rounded-xl border-2 border-dashed border-border hover:border-primary/50 flex items-center justify-center cursor-pointer transition-colors">
                       <Camera className="h-5 w-5 text-muted-foreground" />
                       <input
                         type="file"
                         accept="image/*"
+                        multiple
                         className="hidden"
                         onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            setPhotos(prev => [...prev, file]);
-                          }
+                          handlePhotoAdd(e.target.files);
                           e.target.value = "";
                         }}
                       />
                     </label>
                   )}
                 </div>
+                {photoError && (
+                  <p className="text-sm text-destructive flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {photoError}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Alleen afbeeldingen, max 10 MB per foto
+                </p>
               </div>
             </div>
 
@@ -341,6 +352,9 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
               flowType="emergency"
               selectedDate={date}
               selectedSlot={selectedSlot}
+              baseRate={baseRate}
+              slotAvailability={slotAvailability}
+              availabilityLoading={availabilityLoading}
               onDateChange={(newDate) => {
                 setDate(newDate);
                 setSelectedSlot(null); // Reset slot when date changes
@@ -435,12 +449,13 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
             </div>
 
             <GuestBookingForm
-              serviceId={selectedService || "spoed"}
+              serviceId={matchedServiceType?.id || ""}
               serviceName={selectedServiceData?.label || "Spoedstoring"}
               bookingType="emergency"
               scheduledDate={date ? format(date, "yyyy-MM-dd") : null}
               timeSlot={selectedSlot ? getTimeSlotCategory(selectedSlot) : null}
-              basePrice={PRICING.baseRate}
+              scheduledTimeWindow={scheduledTimeWindow}
+              basePrice={baseRate}
               finalPrice={priceBreakdown.total}
               priceBreakdown={priceBreakdown}
               onSuccess={onSuccess}
@@ -457,11 +472,11 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2">
                   <CheckCircle className="h-4 w-4 text-success" />
-                  <span>Spoedmonteur ingepland</span>
+                  <span>Prioriteit voor beoordeling en snelle inzet</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle className="h-4 w-4 text-success" />
-                  <span>Binnen 30 minuten contact</span>
+                  <span>We nemen zo snel mogelijk contact met je op</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Shield className="h-4 w-4 text-success" />
@@ -471,7 +486,7 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
                   <div className="flex justify-between pt-1 border-t border-border">
                     <span className="text-muted-foreground">Gekozen tijdslot</span>
                     <span className="font-medium">
-                      {format(date, "d MMM", { locale: nl })} • {getTimeSlotLabel()}
+                      {format(date, "d MMM", { locale: nl })} • {scheduledTimeWindow}
                     </span>
                   </div>
                 )}
