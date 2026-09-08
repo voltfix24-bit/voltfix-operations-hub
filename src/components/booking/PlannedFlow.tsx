@@ -7,16 +7,19 @@ import {
   ArrowLeft,
   CheckCircle,
   Shield,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { GuestBookingForm } from "./GuestBookingForm";
+import { GuestBookingForm, type BookingSuccessPayload } from "./GuestBookingForm";
 import { PriceBreakdownCard } from "./PriceBreakdownCard";
 import { TimeSlotCalendar } from "./TimeSlotCalendar";
-import { PRICING, formatPrice, buildPriceBreakdown } from "@/hooks/usePricing";
-import { TimeSlotDefinition, getTimeSlotCategory } from "@/types/booking";
+import { formatPrice, buildPriceBreakdown, roundMoney, PRICING } from "@/hooks/usePricing";
+import { useSlotAvailability } from "@/hooks/useSlotAvailability";
+import { TimeSlotDefinition, getTimeSlotCategory, getTimeSlotWindow } from "@/types/booking";
 
 interface ServiceType {
   id: string;
@@ -27,25 +30,9 @@ interface ServiceType {
   is_emergency_eligible: boolean;
 }
 
-// Planned services with Dutch names (fallback)
-const PLANNED_SERVICES = [
-  { id: "groepenkast", label: "Groepenkast", description: "Uitbreiding, vervanging of keuring" },
-  { id: "kookgroep", label: "Kookgroep / Perilex", description: "Installatie of vervanging" },
-  { id: "laadpaal", label: "Laadpaal", description: "Installatie laadpunt elektrisch voertuig" },
-  { id: "nen-keuring", label: "NEN-keuring", description: "Elektrische veiligheidskeuring" },
-  { id: "overig", label: "Overige werkzaamheden", description: "Andere elektrische werkzaamheden" },
-];
-
 interface PlannedFlowProps {
   onBack: () => void;
-  onSuccess: (payload: {
-    jobId: string;
-    guestName: string;
-    guestPhone: string;
-    address: string;
-    city?: string;
-    postalCode?: string;
-  }) => void;
+  onSuccess: (payload: BookingSuccessPayload) => void;
 }
 
 const fadeInUp = {
@@ -60,8 +47,8 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlotDefinition | null>(null);
-  const [slotPriceInclVat, setSlotPriceInclVat] = useState<number>(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchServices();
@@ -69,36 +56,38 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
 
   const fetchServices = async () => {
     setLoading(true);
-    const { data } = await supabase
+    setLoadError(null);
+    const { data, error } = await supabase
       .from("service_types")
       .select("*")
       .eq("is_emergency_eligible", false)
       .order("base_price", { ascending: true });
 
-    if (data) {
-      setServices(data as ServiceType[]);
+    if (error || !data) {
+      setLoadError("De diensten konden niet worden geladen. Probeer het opnieuw.");
+    } else {
+      setServices(data.map((s) => ({ ...s, base_price: Number(s.base_price) })) as ServiceType[]);
     }
     setLoading(false);
   };
 
   const selectedServiceData = services.find(s => s.id === selectedService);
+  const baseRate = selectedServiceData ? roundMoney(Number(selectedServiceData.base_price)) : PRICING.baseRate;
 
-  // Build price breakdown based on selected slot
+  const { availability: slotAvailability, loading: availabilityLoading } = useSlotAvailability(date);
+
+  // Build price breakdown based on selected service + slot
   const priceBreakdown = buildPriceBreakdown({
     bookingType: "planned",
     date,
     timeSlot: selectedSlot ? getTimeSlotCategory(selectedSlot) : null,
+    baseRate,
   });
 
-  // Get time slot label for summary
-  const getTimeSlotLabel = () => {
-    if (!selectedSlot) return "-";
-    return `${selectedSlot.startTime} – ${selectedSlot.endTime}`;
-  };
+  const scheduledTimeWindow = selectedSlot ? getTimeSlotWindow(selectedSlot) : null;
 
-  const handleSlotChange = (slot: TimeSlotDefinition, priceInclVat: number) => {
+  const handleSlotChange = (slot: TimeSlotDefinition) => {
     setSelectedSlot(slot);
-    setSlotPriceInclVat(priceInclVat);
   };
 
   return (
@@ -123,44 +112,66 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
               </p>
             </div>
 
-            {/* Service Options */}
-            <RadioGroup value={selectedService || ""} onValueChange={setSelectedService}>
-              <div className="space-y-3">
-                {(services.length > 0 ? services : PLANNED_SERVICES.map(s => ({ 
-                  id: s.id, 
-                  name_nl: s.label, 
-                  description: s.description,
-                  base_price: PRICING.baseRate,
-                } as ServiceType))).map((service) => (
-                  <motion.label
-                    key={service.id}
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                    className={cn(
-                      "flex items-center justify-between p-4 rounded-2xl border-2 cursor-pointer transition-all",
-                      selectedService === service.id
-                        ? "border-primary bg-primary/5 shadow-sm"
-                        : "border-border hover:border-primary/50"
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <RadioGroupItem value={service.id} className="shrink-0" />
-                      <div>
-                        <p className="font-medium text-foreground">{service.name_nl}</p>
-                        {service.description && (
-                          <p className="text-sm text-muted-foreground">
-                            {service.description}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <span className="font-bold text-primary shrink-0 ml-2">
-                      vanaf €{PRICING.baseRate}
-                    </span>
-                  </motion.label>
-                ))}
+            {loading && (
+              <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span className="text-sm">Diensten laden...</span>
               </div>
-            </RadioGroup>
+            )}
+
+            {!loading && loadError && (
+              <div className="flex flex-col items-center gap-3 p-5 rounded-2xl bg-destructive/10 border border-destructive/30 text-center">
+                <AlertCircle className="h-6 w-6 text-destructive" />
+                <p className="text-sm text-destructive font-medium">{loadError}</p>
+                <Button variant="outline" size="sm" onClick={fetchServices} className="rounded-xl">
+                  Opnieuw proberen
+                </Button>
+              </div>
+            )}
+
+            {!loading && !loadError && services.length === 0 && (
+              <div className="p-5 rounded-2xl bg-muted/50 border border-border text-center text-sm text-muted-foreground">
+                Er zijn momenteel geen geplande diensten beschikbaar. Neem telefonisch contact met ons op.
+              </div>
+            )}
+
+            {!loading && !loadError && services.length > 0 && (
+              <RadioGroup value={selectedService || ""} onValueChange={setSelectedService}>
+                <div className="space-y-3">
+                  {services.map((service) => (
+                    <motion.label
+                      key={service.id}
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                      className={cn(
+                        "flex items-center justify-between p-4 rounded-2xl border-2 cursor-pointer transition-all",
+                        selectedService === service.id
+                          ? "border-primary bg-primary/5 shadow-sm"
+                          : "border-border hover:border-primary/50"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <RadioGroupItem value={service.id} className="shrink-0" />
+                        <div>
+                          <p className="font-medium text-foreground">{service.name_nl}</p>
+                          {service.description && (
+                            <p className="text-sm text-muted-foreground">
+                              {service.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 ml-2">
+                        <span className="font-bold text-primary">
+                          vanaf {formatPrice(service.base_price)}
+                        </span>
+                        <p className="text-[11px] text-muted-foreground">excl. btw</p>
+                      </div>
+                    </motion.label>
+                  ))}
+                </div>
+              </RadioGroup>
+            )}
 
             <div className="flex gap-3 pt-2">
               <Button
@@ -173,7 +184,7 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
               </Button>
               <Button
                 onClick={() => setStep(2)}
-                disabled={!selectedService}
+                disabled={!selectedServiceData}
                 className="flex-1 h-12 rounded-xl font-semibold"
               >
                 Volgende
@@ -196,6 +207,9 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
               flowType="planned"
               selectedDate={date}
               selectedSlot={selectedSlot}
+              baseRate={baseRate}
+              slotAvailability={slotAvailability}
+              availabilityLoading={availabilityLoading}
               onDateChange={(newDate) => {
                 setDate(newDate);
                 setSelectedSlot(null); // Reset slot when date changes
@@ -221,6 +235,9 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
               <h2 className="font-display text-xl font-bold">
                 Prijsoverzicht
               </h2>
+              {selectedServiceData && (
+                <p className="text-sm text-muted-foreground">{selectedServiceData.name_nl}</p>
+              )}
             </div>
 
             <PriceBreakdownCard
@@ -265,7 +282,7 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
         )}
 
         {/* STEP 4: Contact Details */}
-        {step === 4 && (
+        {step === 4 && selectedServiceData && (
           <motion.div
             key="step4"
             variants={fadeInUp}
@@ -284,12 +301,13 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
             </div>
 
             <GuestBookingForm
-              serviceId={selectedService || ""}
-              serviceName={selectedServiceData?.name_nl || "Geplande werkzaamheden"}
+              serviceId={selectedServiceData.id}
+              serviceName={selectedServiceData.name_nl}
               bookingType="planned"
               scheduledDate={date ? format(date, "yyyy-MM-dd") : null}
               timeSlot={selectedSlot ? getTimeSlotCategory(selectedSlot) : null}
-              basePrice={PRICING.baseRate}
+              scheduledTimeWindow={scheduledTimeWindow}
+              basePrice={baseRate}
               finalPrice={priceBreakdown.total}
               priceBreakdown={priceBreakdown}
               onSuccess={onSuccess}
@@ -304,7 +322,7 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Dienst</span>
-                  <span className="font-medium">{selectedServiceData?.name_nl}</span>
+                  <span className="font-medium">{selectedServiceData.name_nl}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Datum</span>
@@ -314,7 +332,7 @@ export function PlannedFlow({ onBack, onSuccess }: PlannedFlowProps) {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Tijd</span>
-                  <span className="font-medium">{getTimeSlotLabel()}</span>
+                  <span className="font-medium">{scheduledTimeWindow || "-"}</span>
                 </div>
               </div>
               <div className="pt-2 border-t border-border flex items-center justify-between">

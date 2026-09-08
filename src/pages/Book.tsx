@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { nl } from "date-fns/locale";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -12,6 +12,7 @@ import { EmergencyFlow } from "@/components/booking/EmergencyFlow";
 import { PlannedLanding } from "@/components/booking/PlannedLanding";
 import { PlannedFlow } from "@/components/booking/PlannedFlow";
 import { BookingConfirmation } from "@/components/booking/BookingConfirmation";
+import type { BookingSuccessPayload } from "@/components/booking/GuestBookingForm";
 import { Shield, Star, Users, Phone } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -28,7 +29,7 @@ interface BookingData {
   postalCode?: string;
   bookingType: BookingType;
   scheduledDate?: Date;
-  timeSlot?: string;
+  scheduledTimeWindow?: string | null;
 }
 
 const trustIndicators = [
@@ -57,14 +58,7 @@ export default function Book() {
     }
   };
 
-  const handleBookingSuccess = (payload: {
-    jobId: string;
-    guestName: string;
-    guestPhone: string;
-    address: string;
-    city?: string;
-    postalCode?: string;
-  }) => {
+  const handleBookingSuccess = (payload: BookingSuccessPayload) => {
     setBookingData({
       jobId: payload.jobId,
       serviceName: bookingType === "emergency" ? "Spoedstoring" : "Geplande werkzaamheden",
@@ -74,6 +68,8 @@ export default function Book() {
       city: payload.city,
       postalCode: payload.postalCode,
       bookingType: bookingType!,
+      scheduledDate: payload.scheduledDate ? parseISO(payload.scheduledDate) : undefined,
+      scheduledTimeWindow: payload.scheduledTimeWindow ?? null,
     });
     setFlowState("complete");
   };
@@ -128,9 +124,9 @@ export default function Book() {
                 guestName={bookingData.guestName}
                 guestPhone={bookingData.guestPhone}
                 scheduledDate={bookingData.scheduledDate 
-                  ? format(bookingData.scheduledDate, "d MMMM yyyy", { locale: nl }) 
+                  ? format(bookingData.scheduledDate, "EEEE d MMMM yyyy", { locale: nl }) 
                   : null}
-                timeSlot={bookingData.timeSlot || null}
+                timeSlotLabel={bookingData.scheduledTimeWindow || null}
               />
             </motion.div>
           </div>

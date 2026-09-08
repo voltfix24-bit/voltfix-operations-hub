@@ -41,7 +41,7 @@ export function EmergencyLanding({ onStartOnline }: EmergencyLandingProps) {
         </h1>
         
         <p className="text-muted-foreground text-base sm:text-lg max-w-md mx-auto">
-          Binnen 30 minuten nemen we contact met je op.
+          We nemen zo snel mogelijk contact met je op.
           <br />
           <span className="text-foreground font-medium">Geen account nodig. Geen verrassingen.</span>
         </p>

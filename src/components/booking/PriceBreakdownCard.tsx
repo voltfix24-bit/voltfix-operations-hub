@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { Shield, Info, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { formatPrice } from "@/hooks/usePricing";
 
 export interface PriceLine {
   label: string;
@@ -28,10 +29,6 @@ export function PriceBreakdownCard({
   compact = false,
 }: PriceBreakdownCardProps) {
   const [expanded, setExpanded] = useState(!compact);
-
-  const formatPrice = (amount: number) => {
-    return `€${amount.toFixed(2)}`;
-  };
 
   return (
     <motion.div

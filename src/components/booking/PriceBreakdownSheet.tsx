@@ -25,6 +25,8 @@ interface PriceBreakdownSheetProps {
   slot: TimeSlotDefinition | null;
   date: Date | null;
   flowType: "emergency" | "planned";
+  /** Service-specific base rate excl. VAT */
+  baseRate?: number;
 }
 
 export function PriceBreakdownSheet({
@@ -33,13 +35,14 @@ export function PriceBreakdownSheet({
   slot,
   date,
   flowType,
+  baseRate,
 }: PriceBreakdownSheetProps) {
   if (!slot || !date) return null;
 
-  const priceResult = computeSlotPrice(flowType, date, slot);
+  const priceResult = computeSlotPrice(flowType, date, slot, baseRate);
   const { breakdown } = priceResult;
 
-  const lines = [
+  const lines: { label: string; amount: number; hint?: string }[] = [
     {
       label: "Basistarief eerste uur",
       amount: breakdown.baseRate,
@@ -47,11 +50,19 @@ export function PriceBreakdownSheet({
     },
   ];
 
+  if (breakdown.plannedDiscount > 0) {
+    lines.push({
+      label: "Geplande afspraak (-10%)",
+      amount: -breakdown.plannedDiscount,
+      hint: "Korting omdat we de afspraak vooraf kunnen inplannen",
+    });
+  }
+
   if (breakdown.emergencySurcharge > 0) {
     lines.push({
       label: "Spoedtoeslag (+50%)",
       amount: breakdown.emergencySurcharge,
-      hint: "Directe inzet binnen 30 minuten",
+      hint: "Prioriteit voor beoordeling en snelle inzet",
     });
   }
 
@@ -102,8 +113,11 @@ export function PriceBreakdownSheet({
                     </p>
                   )}
                 </div>
-                <span className="font-medium tabular-nums text-sm">
-                  {formatPrice(line.amount)}
+                <span className={cn(
+                  "font-medium tabular-nums text-sm",
+                  line.amount < 0 && "text-success"
+                )}>
+                  {line.amount < 0 ? "- " : ""}{formatPrice(Math.abs(line.amount))}
                 </span>
               </motion.div>
             ))}

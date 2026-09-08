@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
@@ -14,6 +14,7 @@ import {
   Camera,
   X,
   AlertTriangle,
+  AlertCircle,
   Shield,
   CheckCircle,
   type LucideIcon 
@@ -22,31 +23,35 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { GuestBookingForm } from "./GuestBookingForm";
+import { supabase } from "@/integrations/supabase/client";
+import { GuestBookingForm, validatePhotoFiles, MAX_PHOTOS, type BookingSuccessPayload } from "./GuestBookingForm";
 import { PriceBreakdownCard } from "./PriceBreakdownCard";
 import { TimeSlotCalendar } from "./TimeSlotCalendar";
-import { PRICING, formatPrice, buildPriceBreakdown } from "@/hooks/usePricing";
-import { TimeSlotDefinition, getTimeSlotCategory } from "@/types/booking";
+import { formatPrice, buildPriceBreakdown, roundMoney } from "@/hooks/usePricing";
+import { useSlotAvailability } from "@/hooks/useSlotAvailability";
+import { TimeSlotDefinition, getTimeSlotCategory, getTimeSlotWindow } from "@/types/booking";
 
-// Emergency service options
-const EMERGENCY_SERVICES: { id: string; label: string; icon: LucideIcon; warning?: string }[] = [
-  { id: "stroomstoring", label: "Stroomstoring", icon: Power },
-  { id: "kortsluiting", label: "Kortsluiting", icon: Zap },
-  { id: "brandlucht", label: "Brandlucht / rook", icon: Flame, warning: "Bel direct 112 bij gevaar!" },
-  { id: "water-meterkast", label: "Water in meterkast", icon: Droplets },
-  { id: "anders", label: "Anders / niet zeker", icon: HelpCircle },
+/** Fallback base price (excl. btw) when no emergency service is matched */
+export const EMERGENCY_FALLBACK_BASE_PRICE = 125;
+
+// Emergency service options (display). `match` is used to link to a real service_type by name.
+const EMERGENCY_SERVICES: { id: string; label: string; icon: LucideIcon; match: string[]; warning?: string }[] = [
+  { id: "stroomstoring", label: "Stroomstoring", icon: Power, match: ["stroomstoring"] },
+  { id: "kortsluiting", label: "Kortsluiting", icon: Zap, match: ["kortsluiting"] },
+  { id: "brandlucht", label: "Brandlucht / rook", icon: Flame, match: ["brandlucht"], warning: "Bel direct 112 bij gevaar!" },
+  { id: "water-meterkast", label: "Water in meterkast", icon: Droplets, match: ["water in meterkast", "water"] },
+  { id: "anders", label: "Anders / niet zeker", icon: HelpCircle, match: [] },
 ];
+
+interface EmergencyServiceType {
+  id: string;
+  name_nl: string;
+  base_price: number;
+}
 
 interface EmergencyFlowProps {
   onBack: () => void;
-  onSuccess: (payload: {
-    jobId: string;
-    guestName: string;
-    guestPhone: string;
-    address: string;
-    city?: string;
-    postalCode?: string;
-  }) => void;
+  onSuccess: (payload: BookingSuccessPayload) => void;
 }
 
 const fadeInUp = {
@@ -60,18 +65,50 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [description, setDescription] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlotDefinition | null>(null);
-  const [slotPriceInclVat, setSlotPriceInclVat] = useState<number>(0);
+  const [emergencyServices, setEmergencyServices] = useState<EmergencyServiceType[]>([]);
+
+  // Load real emergency services (for service_type_id + base price)
+  useEffect(() => {
+    supabase
+      .from("service_types")
+      .select("id, name_nl, base_price")
+      .eq("is_emergency_eligible", true)
+      .then(({ data }) => {
+        if (data) {
+          setEmergencyServices(data.map((s) => ({ ...s, base_price: Number(s.base_price) })));
+        }
+      });
+  }, []);
+
+  const selectedServiceData = EMERGENCY_SERVICES.find(s => s.id === selectedService);
+
+  // Match chosen situation to a real service type by Dutch name
+  const matchedServiceType = selectedServiceData
+    ? emergencyServices.find((s) =>
+        selectedServiceData.match.some((m) => s.name_nl.toLowerCase().includes(m))
+      )
+    : undefined;
+
+  // Lowest emergency base price as fallback, else 125
+  const lowestEmergencyBase = emergencyServices.length > 0
+    ? Math.min(...emergencyServices.map((s) => s.base_price))
+    : EMERGENCY_FALLBACK_BASE_PRICE;
+  const baseRate = roundMoney(matchedServiceType?.base_price ?? lowestEmergencyBase);
+
+  const { availability: slotAvailability, loading: availabilityLoading } = useSlotAvailability(date);
 
   // Build price breakdown based on selected slot or current time
   const priceBreakdown = buildPriceBreakdown({
     bookingType: "emergency",
     date: date || new Date(),
     timeSlot: selectedSlot ? getTimeSlotCategory(selectedSlot) : null,
+    baseRate,
   });
 
-  const selectedServiceData = EMERGENCY_SERVICES.find(s => s.id === selectedService);
+  const scheduledTimeWindow = selectedSlot ? getTimeSlotWindow(selectedSlot) : null;
 
   const handleServiceSelect = (serviceId: string) => {
     setSelectedService(serviceId);
@@ -79,14 +116,17 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
     setTimeout(() => setStep(2), 300);
   };
 
-  const handleSlotChange = (slot: TimeSlotDefinition, priceInclVat: number) => {
+  const handleSlotChange = (slot: TimeSlotDefinition) => {
     setSelectedSlot(slot);
-    setSlotPriceInclVat(priceInclVat);
   };
 
-  const getTimeSlotLabel = () => {
-    if (!selectedSlot) return "-";
-    return `${selectedSlot.startTime} – ${selectedSlot.endTime}`;
+  const handlePhotoAdd = (files: FileList | null) => {
+    if (!files) return;
+    const { accepted, error } = validatePhotoFiles(Array.from(files), photos.length);
+    setPhotoError(error);
+    if (accepted.length > 0) {
+      setPhotos(prev => [...prev, ...accepted]);
+    }
   };
 
   return (
@@ -228,7 +268,7 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
               {/* Photo Upload */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium">
-                  Foto toevoegen (max 5)
+                  Foto toevoegen (optioneel, max {MAX_PHOTOS})
                 </Label>
                 <div className="flex flex-wrap gap-3">
                   {photos.map((photo, idx) => (
@@ -240,31 +280,42 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
                       />
                       <button
                         type="button"
-                        onClick={() => setPhotos(prev => prev.filter((_, i) => i !== idx))}
+                        onClick={() => {
+                          setPhotos(prev => prev.filter((_, i) => i !== idx));
+                          setPhotoError(null);
+                        }}
                         className="absolute -top-2 -right-2 p-1 rounded-full bg-destructive text-destructive-foreground shadow-md"
+                        aria-label="Foto verwijderen"
                       >
                         <X className="h-3 w-3" />
                       </button>
                     </div>
                   ))}
-                  {photos.length < 5 && (
+                  {photos.length < MAX_PHOTOS && (
                     <label className="w-16 h-16 rounded-xl border-2 border-dashed border-border hover:border-primary/50 flex items-center justify-center cursor-pointer transition-colors">
                       <Camera className="h-5 w-5 text-muted-foreground" />
                       <input
                         type="file"
                         accept="image/*"
+                        multiple
                         className="hidden"
                         onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            setPhotos(prev => [...prev, file]);
-                          }
+                          handlePhotoAdd(e.target.files);
                           e.target.value = "";
                         }}
                       />
                     </label>
                   )}
                 </div>
+                {photoError && (
+                  <p className="text-sm text-destructive flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {photoError}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Alleen afbeeldingen, max 10 MB per foto
+                </p>
               </div>
             </div>
 
@@ -301,6 +352,9 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
               flowType="emergency"
               selectedDate={date}
               selectedSlot={selectedSlot}
+              baseRate={baseRate}
+              slotAvailability={slotAvailability}
+              availabilityLoading={availabilityLoading}
               onDateChange={(newDate) => {
                 setDate(newDate);
                 setSelectedSlot(null); // Reset slot when date changes
@@ -395,12 +449,13 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
             </div>
 
             <GuestBookingForm
-              serviceId={selectedService || "spoed"}
+              serviceId={matchedServiceType?.id || ""}
               serviceName={selectedServiceData?.label || "Spoedstoring"}
               bookingType="emergency"
               scheduledDate={date ? format(date, "yyyy-MM-dd") : null}
               timeSlot={selectedSlot ? getTimeSlotCategory(selectedSlot) : null}
-              basePrice={PRICING.baseRate}
+              scheduledTimeWindow={scheduledTimeWindow}
+              basePrice={baseRate}
               finalPrice={priceBreakdown.total}
               priceBreakdown={priceBreakdown}
               onSuccess={onSuccess}
@@ -417,11 +472,11 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2">
                   <CheckCircle className="h-4 w-4 text-success" />
-                  <span>Spoedmonteur ingepland</span>
+                  <span>Prioriteit voor beoordeling en snelle inzet</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle className="h-4 w-4 text-success" />
-                  <span>Binnen 30 minuten contact</span>
+                  <span>We nemen zo snel mogelijk contact met je op</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Shield className="h-4 w-4 text-success" />
@@ -431,7 +486,7 @@ export function EmergencyFlow({ onBack, onSuccess }: EmergencyFlowProps) {
                   <div className="flex justify-between pt-1 border-t border-border">
                     <span className="text-muted-foreground">Gekozen tijdslot</span>
                     <span className="font-medium">
-                      {format(date, "d MMM", { locale: nl })} • {getTimeSlotLabel()}
+                      {format(date, "d MMM", { locale: nl })} • {scheduledTimeWindow}
                     </span>
                   </div>
                 )}

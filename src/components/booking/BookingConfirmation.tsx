@@ -14,6 +14,8 @@ interface BookingConfirmationProps {
   guestPhone: string;
   scheduledDate?: string | null;
   timeSlot?: string | null;
+  /** Exact chosen time window, e.g. "08:00 - 10:00" */
+  timeSlotLabel?: string | null;
 }
 
 export function BookingConfirmation({
@@ -25,17 +27,21 @@ export function BookingConfirmation({
   guestPhone,
   scheduledDate,
   timeSlot,
+  timeSlotLabel,
 }: BookingConfirmationProps) {
   const [copied, setCopied] = useState(false);
 
   const getTimeSlotLabel = (slot: string | null) => {
     switch (slot) {
-      case "morning": return "Ochtend (08:00 - 12:00)";
-      case "afternoon": return "Middag (12:00 - 17:00)";
-      case "evening": return "Avond (17:00 - 21:00)";
+      case "morning": return "Ochtend";
+      case "afternoon": return "Middag";
+      case "evening": return "Avond";
+      case "night": return "Nacht";
       default: return "";
     }
   };
+
+  const displayTimeSlot = timeSlotLabel || getTimeSlotLabel(timeSlot ?? null);
 
   const handleCopyId = async () => {
     await navigator.clipboard.writeText(jobId);
@@ -153,19 +159,26 @@ export function BookingConfirmation({
               <Clock className="h-5 w-5 text-emergency" />
             </div>
             <div>
-              <p className="font-bold text-emergency">Binnen 30 minuten</p>
-              <p className="text-sm text-muted-foreground">Een elektricien komt zo snel mogelijk</p>
+              <p className="font-bold text-emergency">Direct opgepakt</p>
+              <p className="text-sm text-muted-foreground">
+                Je aanvraag krijgt prioriteit; we nemen zo snel mogelijk contact met je op.
+              </p>
+              {(scheduledDate || displayTimeSlot) && (
+                <p className="text-sm font-medium mt-1">
+                  {[scheduledDate, displayTimeSlot].filter(Boolean).join(" • ")}
+                </p>
+              )}
             </div>
           </motion.div>
-        ) : scheduledDate && (
+        ) : (scheduledDate || displayTimeSlot) && (
           <div className="flex items-start gap-3">
             <div className="p-2 rounded-xl bg-muted">
               <Clock className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
-              <p className="font-medium">{scheduledDate}</p>
-              {timeSlot && (
-                <p className="text-sm text-muted-foreground">{getTimeSlotLabel(timeSlot)}</p>
+              {scheduledDate && <p className="font-medium">{scheduledDate}</p>}
+              {displayTimeSlot && (
+                <p className="text-sm text-muted-foreground">{displayTimeSlot}</p>
               )}
             </div>
           </div>

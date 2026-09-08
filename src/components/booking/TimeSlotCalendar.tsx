@@ -28,7 +28,7 @@ import {
 import { 
   useDaySlots, 
   formatSlotTime,
-  computeSlotPrice,
+  type SlotAvailability,
 } from "@/hooks/useSlotPricing";
 import { formatPrice, PRICING } from "@/hooks/usePricing";
 import { PriceBreakdownSheet } from "./PriceBreakdownSheet";
@@ -41,6 +41,12 @@ interface TimeSlotCalendarProps {
   onSlotChange: (slot: TimeSlotDefinition, priceInclVat: number) => void;
   onContinue: () => void;
   onBack: () => void;
+  /** Service-specific base rate excl. VAT */
+  baseRate?: number;
+  /** Availability per slot category from the backend */
+  slotAvailability?: SlotAvailability;
+  /** Availability is being fetched */
+  availabilityLoading?: boolean;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -50,9 +56,10 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const BADGE_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  avond: { label: "Avond", variant: "secondary" },
-  weekend: { label: "Weekend", variant: "secondary" },
-  spoed: { label: "Spoed", variant: "destructive" },
+  avond: { label: "Avond +25%", variant: "secondary" },
+  weekend: { label: "Weekend +35%", variant: "secondary" },
+  spoed: { label: "Spoed +50%", variant: "destructive" },
+  korting: { label: "Gepland -10%", variant: "default" },
   "laatste-plek": { label: "Laatste plek", variant: "outline" },
 };
 
@@ -64,6 +71,9 @@ export function TimeSlotCalendar({
   onSlotChange,
   onContinue,
   onBack,
+  baseRate = PRICING.baseRate,
+  slotAvailability,
+  availabilityLoading = false,
 }: TimeSlotCalendarProps) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [priceSheetOpen, setPriceSheetOpen] = useState(false);
@@ -75,12 +85,12 @@ export function TimeSlotCalendar({
   // Generate 7 days starting from weekStart
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   
-  // Get slots for selected date
-  const daySlots = useDaySlots(selectedDate, flowType);
+  // Get slots for selected date (prices + availability)
+  const daySlots = useDaySlots(selectedDate, flowType, baseRate, slotAvailability);
   
   // Check if any slots available
   const hasAvailableSlots = daySlots.some((s) => s.status !== "full");
-  const showNoSlotsWarning = flowType === "emergency" && selectedDate && !hasAvailableSlots;
+  const showNoSlotsWarning = flowType === "emergency" && selectedDate && !hasAvailableSlots && !availabilityLoading;
 
   const handleDaySelect = useCallback((day: Date) => {
     // Don't allow selecting past days
@@ -298,9 +308,9 @@ export function TimeSlotCalendar({
                             flowType === "emergency" ? "text-emergency" : "text-primary",
                             isFull && "text-muted-foreground"
                           )}>
-                            {formatPrice(daySlot.priceExclVat)}
+                            {formatPrice(daySlot.priceInclVat)}
                           </p>
-                          <p className="text-xs text-muted-foreground">excl. btw</p>
+                          <p className="text-xs text-muted-foreground">incl. btw</p>
                         </div>
                         {!isFull && (
                           <button
@@ -377,6 +387,7 @@ export function TimeSlotCalendar({
         slot={sheetSlot?.slot || null}
         date={sheetSlot?.date || null}
         flowType={flowType}
+        baseRate={baseRate}
       />
     </div>
   );

@@ -1,33 +1,40 @@
 /**
  * VoltFix Slot Pricing Hook
- * 
+ *
  * Calculates prices for specific time slots based on:
  * - Booking type (emergency vs planned)
+ * - Service-specific base rate
  * - Day of week (weekend surcharge)
  * - Time of day (evening surcharge)
- * 
- * Price stacking rules:
- * - Emergency + one time surcharge: ✓ allowed
- * - Weekend + Evening: ✗ NOT allowed (weekend wins)
+ *
+ * Rules:
+ * - Planned: -10% on base rate
+ * - Emergency: +50% on base rate
+ * - Weekend + Evening: weekend wins
  */
 
 import { useMemo } from "react";
-import { PRICING } from "@/hooks/usePricing";
-import { 
-  TimeSlotDefinition, 
-  DaySlot, 
-  TimeSlotStatus, 
+import { PRICING, roundMoney } from "@/hooks/usePricing";
+import {
+  TimeSlotDefinition,
+  DaySlot,
+  TimeSlotStatus,
   SlotBadge,
+  TimeSlotCategory,
   getSlotsForDay,
+  getTimeSlotCategory,
   isWeekend as checkIsWeekend,
   DayOfWeek,
 } from "@/types/booking";
+
+export type SlotAvailability = Partial<Record<TimeSlotCategory, TimeSlotStatus>>;
 
 export interface SlotPriceResult {
   priceExclVat: number;
   priceInclVat: number;
   breakdown: {
     baseRate: number;
+    plannedDiscount: number;
     emergencySurcharge: number;
     eveningSurcharge: number;
     weekendSurcharge: number;
@@ -47,45 +54,50 @@ export function computeSlotPrice(
   slot: TimeSlotDefinition,
   baseRate: number = PRICING.baseRate
 ): SlotPriceResult {
-  let runningTotal = baseRate;
+  const base = roundMoney(baseRate);
+  let runningTotal = base;
   const activeSurcharges: SlotBadge[] = [];
-  
+
   const isWeekendDay = checkIsWeekend(date);
   const isEveningSlot = slot.isEvening;
-  
-  // Track individual surcharges
+
+  let plannedDiscount = 0;
   let emergencySurcharge = 0;
   let weekendSurcharge = 0;
   let eveningSurcharge = 0;
 
-  // 1. Emergency surcharge (can stack with time surcharge)
+  // 1. Planned discount or emergency surcharge
   if (flowType === "emergency") {
-    emergencySurcharge = baseRate * PRICING.emergencySurchargePct;
-    runningTotal += emergencySurcharge;
+    emergencySurcharge = roundMoney(base * PRICING.emergencySurchargePct);
+    runningTotal = roundMoney(runningTotal + emergencySurcharge);
     activeSurcharges.push("spoed");
+  } else {
+    plannedDiscount = roundMoney(base * PRICING.plannedDiscountPct);
+    runningTotal = roundMoney(runningTotal - plannedDiscount);
+    activeSurcharges.push("korting");
   }
 
-  // 2. Time surcharge - only ONE applies, highest wins
-  // Weekend (35%) trumps Evening (25%)
+  // 2. Time surcharge - only ONE applies, weekend wins
   if (isWeekendDay) {
-    weekendSurcharge = runningTotal * PRICING.weekendSurchargePct;
-    runningTotal += weekendSurcharge;
+    weekendSurcharge = roundMoney(runningTotal * PRICING.weekendSurchargePct);
+    runningTotal = roundMoney(runningTotal + weekendSurcharge);
     activeSurcharges.push("weekend");
   } else if (isEveningSlot) {
-    eveningSurcharge = runningTotal * PRICING.eveningSurchargePct;
-    runningTotal += eveningSurcharge;
+    eveningSurcharge = roundMoney(runningTotal * PRICING.eveningSurchargePct);
+    runningTotal = roundMoney(runningTotal + eveningSurcharge);
     activeSurcharges.push("avond");
   }
 
-  const subtotal = Math.round(runningTotal * 100) / 100;
-  const vat = Math.round(subtotal * PRICING.vatRate * 100) / 100;
-  const total = Math.round((subtotal + vat) * 100) / 100;
+  const subtotal = roundMoney(runningTotal);
+  const vat = roundMoney(subtotal * PRICING.vatRate);
+  const total = roundMoney(subtotal + vat);
 
   return {
     priceExclVat: subtotal,
     priceInclVat: total,
     breakdown: {
-      baseRate,
+      baseRate: base,
+      plannedDiscount,
       emergencySurcharge,
       eveningSurcharge,
       weekendSurcharge,
@@ -98,26 +110,14 @@ export function computeSlotPrice(
 }
 
 /**
- * Generate mock availability statuses
- * In production, this would fetch from database
- */
-function getMockAvailability(date: Date, slotId: string): TimeSlotStatus {
-  // Create deterministic "random" based on date + slot
-  const seed = date.getTime() + slotId.charCodeAt(0);
-  const rand = (seed % 100);
-  
-  // 70% available, 20% limited, 10% full
-  if (rand < 70) return "available";
-  if (rand < 90) return "limited";
-  return "full";
-}
-
-/**
- * Get all slots for a given date with prices and availability
+ * Get all slots for a given date with prices and availability.
+ * Availability comes from the backend (per time slot category); defaults to "available".
  */
 export function useDaySlots(
   date: Date | undefined,
-  flowType: "emergency" | "planned"
+  flowType: "emergency" | "planned",
+  baseRate: number = PRICING.baseRate,
+  availability?: SlotAvailability
 ): DaySlot[] {
   return useMemo(() => {
     if (!date) return [];
@@ -126,9 +126,10 @@ export function useDaySlots(
     const slotDefs = getSlotsForDay(dayOfWeek);
 
     return slotDefs.map((slot) => {
-      const priceResult = computeSlotPrice(flowType, date, slot);
-      const status = getMockAvailability(date, slot.id);
-      
+      const priceResult = computeSlotPrice(flowType, date, slot, baseRate);
+      const category = getTimeSlotCategory(slot);
+      const status: TimeSlotStatus = availability?.[category] ?? "available";
+
       const badges: SlotBadge[] = [...priceResult.activeSurcharges];
       if (status === "limited") {
         badges.push("laatste-plek");
@@ -142,19 +143,19 @@ export function useDaySlots(
         badges,
       };
     });
-  }, [date?.getTime(), flowType]);
+  }, [date?.getTime(), flowType, baseRate, availability]);
 }
 
 /**
- * Check if there are any available slots within 24 hours
+ * Check if there are any available slots
  */
 export function hasEmergencySlotsAvailable(slots: DaySlot[]): boolean {
   return slots.some((slot) => slot.status !== "full");
 }
 
 /**
- * Format slot time range for display
+ * Format slot time range for display, e.g. "08:00 - 10:00"
  */
 export function formatSlotTime(slot: TimeSlotDefinition): string {
-  return `${slot.startTime} – ${slot.endTime}`;
+  return `${slot.startTime} - ${slot.endTime}`;
 }
