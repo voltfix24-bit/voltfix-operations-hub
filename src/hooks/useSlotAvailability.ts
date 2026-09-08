@@ -33,12 +33,11 @@ export function useSlotAvailability(date: Date | undefined) {
     setLoading(true);
 
     // RPC is added by the backend hardening migration; typed loosely until types are regenerated.
-    const rpc = (supabase.rpc as unknown as (
-      fn: string,
-      args: Record<string, unknown>
-    ) => PromiseLike<{ data: AvailabilityRow[] | null; error: unknown }>);
+    const client = supabase as unknown as {
+      rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: AvailabilityRow[] | null; error: unknown }>;
+    };
 
-    Promise.resolve(rpc("get_public_slot_availability", { p_date: dateKey }))
+    Promise.resolve(client.rpc("get_public_slot_availability", { p_date: dateKey }))
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error || !data) {
