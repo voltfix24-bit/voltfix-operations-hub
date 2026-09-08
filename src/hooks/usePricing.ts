@@ -20,7 +20,7 @@
  */
 
 import { useMemo } from "react";
-import { type PriceBreakdown, type PriceLine } from "@/components/booking/PriceBreakdownCard";
+import type { PriceBreakdown, PriceLine } from "@/components/booking/PriceBreakdownCard";
 
 // Core pricing constants
 export const PRICING = {
