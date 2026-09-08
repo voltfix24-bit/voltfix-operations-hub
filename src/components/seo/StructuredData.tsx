@@ -175,7 +175,7 @@ function getStructuredData(type: string, data?: Record<string, unknown>) {
             name: "Hoe snel kan VoltFix er zijn bij een storing?",
             acceptedAnswer: {
               "@type": "Answer",
-              text: "Bij spoed zijn we gemiddeld binnen 30 minuten bij u. Onze 24/7 storingsdienst is het hele jaar door beschikbaar.",
+              text: "Spoedaanvragen krijgen prioriteit voor beoordeling en snelle inzet. Onze 24/7 storingsdienst is het hele jaar door beschikbaar.",
             },
           },
           {
