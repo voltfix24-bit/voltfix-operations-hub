@@ -10,13 +10,40 @@ import { cn } from "@/lib/utils";
 import { type PriceBreakdown } from "./PriceBreakdownCard";
 import { useAddressLookup } from "@/hooks/useAddressLookup";
 
-interface BookingSuccessPayload {
+export interface BookingSuccessPayload {
   jobId: string;
   guestName: string;
   guestPhone: string;
   address: string;
   city?: string;
   postalCode?: string;
+  scheduledDate?: string | null;
+  scheduledTimeWindow?: string | null;
+}
+
+export const MAX_PHOTOS = 5;
+export const MAX_PHOTO_SIZE = 10 * 1024 * 1024; // 10 MB
+
+/** Validate a batch of files for upload. Returns accepted files and an error message (if any). */
+export function validatePhotoFiles(files: File[], existingCount: number): { accepted: File[]; error: string | null } {
+  const accepted: File[] = [];
+  let error: string | null = null;
+  for (const file of files) {
+    if (existingCount + accepted.length >= MAX_PHOTOS) {
+      error = `Je kunt maximaal ${MAX_PHOTOS} foto's toevoegen`;
+      break;
+    }
+    if (!file.type.startsWith("image/")) {
+      error = "Alleen afbeeldingen zijn toegestaan";
+      continue;
+    }
+    if (file.size > MAX_PHOTO_SIZE) {
+      error = "Een foto mag maximaal 10 MB zijn";
+      continue;
+    }
+    accepted.push(file);
+  }
+  return { accepted, error };
 }
 
 interface GuestBookingFormProps {
@@ -25,6 +52,8 @@ interface GuestBookingFormProps {
   bookingType: "emergency" | "planned";
   scheduledDate?: string | null;
   timeSlot?: string | null;
+  /** Exact chosen time window, e.g. "08:00 - 10:00" */
+  scheduledTimeWindow?: string | null;
   basePrice: number;
   finalPrice: number;
   priceBreakdown: PriceBreakdown;
@@ -40,6 +69,7 @@ export function GuestBookingForm({
   bookingType,
   scheduledDate,
   timeSlot,
+  scheduledTimeWindow,
   basePrice,
   finalPrice,
   priceBreakdown,
@@ -144,10 +174,13 @@ export function GuestBookingForm({
     const files = e.target.files;
     if (!files) return;
 
-    const newPhotos = Array.from(files).slice(0, 5 - photos.length);
-    setPhotos(prev => [...prev, ...newPhotos]);
-    
-    const urls = newPhotos.map(file => URL.createObjectURL(file));
+    const { accepted, error } = validatePhotoFiles(Array.from(files), photos.length);
+    setErrors(prev => ({ ...prev, photos: error || "" }));
+    e.target.value = "";
+    if (accepted.length === 0) return;
+
+    setPhotos(prev => [...prev, ...accepted]);
+    const urls = accepted.map(file => URL.createObjectURL(file));
     setPhotoUrls(prev => [...prev, ...urls]);
   };
 
@@ -247,6 +280,8 @@ export function GuestBookingForm({
         address: fullAddress,
         city: city || undefined,
         postalCode: postalCode || undefined,
+        scheduledDate: scheduledDate || null,
+        scheduledTimeWindow: scheduledTimeWindow || null,
       });
     } catch (err) {
       console.error("Booking error:", err);
@@ -629,8 +664,14 @@ export function GuestBookingForm({
             onChange={handleFileChange}
             className="hidden"
           />
+          {errors.photos && (
+            <p className="text-sm text-destructive flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              {errors.photos}
+            </p>
+          )}
           <p className="text-xs text-muted-foreground">
-            Upload foto's van het probleem om de elektricien te helpen
+            Upload foto's van het probleem om de elektricien te helpen (alleen afbeeldingen, max 10 MB per foto)
           </p>
         </div>
       </motion.div>
