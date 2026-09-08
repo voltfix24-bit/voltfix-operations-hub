@@ -244,15 +244,15 @@ export function GuestBookingForm({
         timeSlot: timeSlot || null,
       };
       
-      // For emergency bookings, serviceId is a string like "kortsluiting", not a UUID
-      // So we set service_type_id to null and include the emergency type in description
+      // Emergency: serviceId is a real service_type UUID when the situation could be matched, otherwise empty.
+      // The chosen situation is always included in the description for the dispatcher.
       const isEmergency = bookingType === "emergency";
       const finalDescription = isEmergency 
         ? `[${serviceName}] ${description || ""}`.trim()
         : description || null;
       
       const { data, error } = await supabase.from("jobs").insert([{
-        service_type_id: isEmergency ? null : serviceId,
+        service_type_id: serviceId || null,
         urgency: bookingType,
         status: "requested" as const,
         scheduled_date: scheduledDate || null,
