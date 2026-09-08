@@ -6,6 +6,9 @@
 
 export type TimeSlotStatus = "available" | "limited" | "full";
 
+/** Database time_slot enum category */
+export type TimeSlotCategory = "morning" | "afternoon" | "evening" | "night";
+
 export interface TimeSlotDefinition {
   id: string;
   startTime: string; // "08:00"
@@ -21,7 +24,7 @@ export interface DaySlot {
   badges: SlotBadge[];
 }
 
-export type SlotBadge = "avond" | "weekend" | "spoed" | "laatste-plek";
+export type SlotBadge = "avond" | "weekend" | "spoed" | "korting" | "laatste-plek";
 
 export type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0 = Sunday, 6 = Saturday
 
@@ -69,12 +72,19 @@ export function isWeekend(date: Date): boolean {
 }
 
 /**
- * Convert time slot to general category for pricing
+ * Convert time slot to general category (matches DB time_slot enum)
  */
-export function getTimeSlotCategory(slot: TimeSlotDefinition): "morning" | "afternoon" | "evening" | "night" {
+export function getTimeSlotCategory(slot: TimeSlotDefinition): TimeSlotCategory {
   const hour = parseInt(slot.startTime.split(":")[0], 10);
   if (hour >= 20) return "night";
   if (hour >= 18) return "evening";
   if (hour >= 12) return "afternoon";
   return "morning";
+}
+
+/**
+ * Exact time window text for storage/display, e.g. "08:00 - 10:00"
+ */
+export function getTimeSlotWindow(slot: TimeSlotDefinition): string {
+  return `${slot.startTime} - ${slot.endTime}`;
 }
