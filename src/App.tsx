@@ -12,6 +12,8 @@ import Book from "./pages/Book";
 // Auth pages
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 
 // Backoffice pages
 import CustomerDashboard from "./pages/CustomerDashboard";
@@ -91,6 +93,8 @@ function BackofficeRoutes() {
       {/* Auth routes */}
       <Route path="/login" element={<AuthRoute><Login /></AuthRoute>} />
       <Route path="/register" element={<AuthRoute><Register /></AuthRoute>} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
 
       {/* Customer dashboard */}
       <Route 
@@ -142,6 +146,8 @@ function DevelopmentRoutes() {
       {/* Auth routes */}
       <Route path="/login" element={<AuthRoute><Login /></AuthRoute>} />
       <Route path="/register" element={<AuthRoute><Register /></AuthRoute>} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
 
       {/* Customer routes */}
       <Route 
