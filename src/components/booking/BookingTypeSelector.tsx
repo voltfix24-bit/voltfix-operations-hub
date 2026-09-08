@@ -74,7 +74,7 @@ export function BookingTypeSelector({ onSelect }: BookingTypeSelectorProps) {
                   🚨 SPOED
                 </h3>
                 <span className="px-2 py-0.5 rounded-full bg-emergency/20 text-emergency text-xs font-semibold">
-                  30 min
+                  Prioriteit
                 </span>
               </div>
               <p className="text-sm text-muted-foreground mb-3">
